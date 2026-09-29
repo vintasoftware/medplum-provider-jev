@@ -16,7 +16,7 @@ The guided demo runs end to end with TypeSafe's hosted Jev. It lets us test both
 
 In the demo, **Start scenario** creates a new synthetic patient with that history. A signed visit from 35 days ago lists lisinopril 10 mg, and the active order still has that dose. The discharge summary from a week ago raises it to 20 mg. Today's follow-up is ready to begin. The video follows the provider through that visit in the real app, connected to a hosted Medplum project.
 
-[![Watch the full guided demo, about two minutes.](article/images/demo-poster.png)](GUIDED_DEMO_VIDEO_URL)
+[![Watch the full guided demo, about two minutes.](article/images/demo-poster.png)](https://github.com/user-attachments/assets/ce413f25-983d-4384-9b5a-30054e6a4ebd)
 
 The provider reads the discharge summary, writes the visit note and sets the visit to **Finished**. That saves the note and runs the check once. If the plan says "continue lisinopril 10 mg daily", the card reports a potential conflict and highlights the dose in each document.
 

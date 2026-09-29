@@ -172,7 +172,7 @@ Add `TYPESAFE_API_KEY` and `CONSISTENCY_BACKEND=typesafe` as ordinary string sec
 
 ## Videos
 
-Watch the [guided demo](GUIDED_DEMO_VIDEO_URL) (about two minutes) and the [square marketing cut](MARKETING_VIDEO_URL) (47 s). Both are built from a fresh recording of the guided demo:
+Watch the [guided demo](https://github.com/user-attachments/assets/ce413f25-983d-4384-9b5a-30054e6a4ebd) (about two minutes) and the [square marketing cut](https://github.com/user-attachments/assets/2b8a33b3-a247-4fbf-ad4f-538a8b152da4) (47 s). Both are built from a fresh recording of the guided demo:
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
