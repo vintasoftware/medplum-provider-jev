@@ -1,18 +1,24 @@
-# A Jev-like AI for Healthcare
+# Medplum Provider + Jev
 
-A guided provider workflow in the Medplum Provider App. A tester plays a primary care provider at a post-discharge follow-up visit. When they finish the visit, a Medplum Bot compares their free-text note with an outside hospital discharge summary using **TypeSafe's hosted Jev**. A review card shows what it found: `agreement`, `potential_conflict` or `insufficient_information`. The provider edits the note, signs with a documented reason, or creates a reconciliation task. The model never changes the chart.
+This is a guided demo in the Medplum Provider App. A tester plays the role of a primary care provider at a post-discharge follow-up visit. When they finish the visit, a Medplum Bot compares their free-text note with an outside hospital discharge summary using **[TypeSafe's Jev](https://typesafe.ai/)**. A review card shows what it found: `agreement`, `potential_conflict` or `insufficient_information`. The provider edits the note, signs with a documented reason, or creates a reconciliation task.
+
+Demo video:
+
+https://github.com/user-attachments/assets/ce413f25-983d-4384-9b5a-30054e6a4ebd
+
+Synthetic data only. One synthetic run is not clinical validation, therefore adapt this for your real workflows.
+
+## More info
 
 - [ARTICLE.md](ARTICLE.md): why this workflow, how it works, model choices, results and limits.
-- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Decider model on a private Modal GPU instead of hosted Jev.
-
-Synthetic data only. One synthetic run is not clinical validation.
+- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Decider model on a private Modal GPU instead of hosted Jev for proper HIPAA compliance.
 
 ## Quick start
 
 You need:
 
 - **Node** `^22.18.0` or `>=24.2.0` (it runs the TypeScript scripts directly).
-- A **Medplum project with Bots enabled** at [app.medplum.com](https://app.medplum.com), where you are an administrator. Use a project for synthetic data only: every run creates a new synthetic patient. Bots are not included in Medplum's free plan.
+- A **Medplum project with Bots enabled** at [app.medplum.com](https://app.medplum.com), where you are an administrator. Use a project for synthetic data only: every run creates a new synthetic patient. Ask Medplum's support for Bots if you're not a paying customer yet.
 - A **TypeSafe API key**.
 
 From the repository root:
@@ -35,11 +41,11 @@ npm --prefix provider run dev
 
 Open `http://localhost:3001`, sign in, choose **Guided demo** in the sidebar and click **Start scenario**.
 
-The setup command asks for the TypeSafe key with hidden input the first time. To skip the prompt, put `TYPESAFE_API_KEY=...` in the root `.env` first. `--email` is optional: it invites a practitioner login limited to the demo policy, and Medplum emails that address a link to set the password. Without it, sign in as yourself.
+The setup command asks for the TypeSafe key with hidden input the first time. To skip the prompt, put `TYPESAFE_API_KEY=...` in the root `.env` first. `--email` is optional: it invites a practitioner login limited to the demo policy, and Medplum emails that address a link to set the password. Without it, sign in as an admin.
 
 ## What the setup command does
 
-`npm --prefix provider run setup` reuses your CLI login. Before each step it reads the project, then creates or changes only what is missing. Running it again is safe, `--dry-run` writes nothing, and it never deletes anything.
+`npm --prefix provider run setup` reuses your CLI login. Before each step it reads the project, then creates or changes only what is missing. Running it again is safe, `--dry-run` writes nothing.
 
 | Step | Result |
 | --- | --- |
@@ -169,19 +175,6 @@ Add `TYPESAFE_API_KEY` and `CONSISTENCY_BACKEND=typesafe` as ordinary string sec
 | Card: No outside discharge summary is on file | Use Start scenario; the check needs a current LOINC 18842-5 DocumentReference with `text/plain` content |
 | Card: The self-hosted Modal backend does not accept visit text yet | Set `CONSISTENCY_BACKEND` to `typesafe`; see [SELF-HOSTING.md](SELF-HOSTING.md) |
 | e2e: `recorded with different Bot questions` | Re-record: `E2E_RECORD=1 npm --prefix provider run test:e2e` |
-
-## Videos
-
-Watch the [guided demo](https://github.com/user-attachments/assets/ce413f25-983d-4384-9b5a-30054e6a4ebd) (about two minutes) and the [square marketing cut](https://github.com/user-attachments/assets/2b8a33b3-a247-4fbf-ad4f-538a8b152da4) (47 s). Both are built from a fresh recording of the guided demo:
-
-```bash
-python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/playwright install chromium
-npm --prefix provider run dev    # in another terminal
-DEMO_EMAIL=you+tester@example.com DEMO_PASSWORD=... videos/build.sh
-```
-
-It needs ffmpeg and sox, makes real Jev calls and creates one synthetic patient. The videos are written to `videos/out/`, which Git ignores. `videos/demo/` records the demo and burns in its captions. `videos/marketing/` renders `composition.html` frame by frame over a cut of the same take; the logos in `videos/marketing/assets/` are their owners' trademarks. `python article/render_figures.py` then re-renders the article figures, taking the poster frame from `videos/out/demo/guided-demo.mp4`.
 
 ## Privacy
 
