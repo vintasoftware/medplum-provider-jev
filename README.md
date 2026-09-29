@@ -6,7 +6,7 @@ Demo video:
 
 https://github.com/user-attachments/assets/ce413f25-983d-4384-9b5a-30054e6a4ebd
 
-Synthetic data only. One synthetic run is not clinical validation, therefore adapt this for your real workflows.
+Synthetic data only. One synthetic run is not clinical validation. Validate it with clinicians before adapting it to real workflows.
 
 ## More info
 
