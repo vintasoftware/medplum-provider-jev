@@ -1,0 +1,416 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Article figures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=block" rel="stylesheet">
+<!--
+  Figures for ARTICLE.md, adapted from the marketing video's redrawn Provider App UI
+  (videos/marketing/composition.html). Each <figure> is
+  screenshotted to images/<id>.png by render_figures.py. Synthetic data only; no
+  third-party logos are drawn.
+-->
+<style>
+  :root {
+    --vinta: #1753ff;
+    --vinta-deep: #0b2a8a;
+    --ink: #121826;
+    --body: #2b3445;
+    --muted: #5b6475;
+    --line: #e3e7ef;
+    --jev: #e0559b;
+    /* Label colors: validated as a set (dataviz validate_palette.js, light). */
+    --conflict: #e8590c; --conflict-bg: #fff4e6; --conflict-ink: #c2410c;
+    --agree: #0ca678; --agree-bg: #e6fcf5; --agree-ink: #087f5b;
+    --unknown: #7950f2; --unknown-bg: #f3f0ff; --unknown-ink: #5f3dc4;
+    --mark: #ffec3d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, system-ui, sans-serif; color: var(--ink); background: #fff; padding: 20px; }
+  figure {
+    position: relative; width: 1200px; margin-bottom: 40px; overflow: hidden; border-radius: 28px;
+    background: radial-gradient(900px 600px at 8% 0%, #bfe6ff 0%, rgba(191, 230, 255, 0) 70%),
+                radial-gradient(800px 700px at 100% 100%, #d9dcff 0%, rgba(217, 220, 255, 0) 65%), #f5f8ff;
+  }
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: 0 30px 60px -24px rgba(18, 24, 38, 0.22), 0 8px 18px -8px rgba(18, 24, 38, 0.10);
+  }
+  .eyebrow { font-size: 15px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .headline { font-size: 40px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; text-align: center; }
+  .sub { font-size: 22px; color: var(--muted); text-align: center; margin-top: 10px; }
+  mark { background: var(--mark); color: inherit; padding: 1px 4px; border-radius: 4px; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 14px;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+  }
+  .chip.conflict { background: var(--conflict-bg); color: var(--conflict-ink); }
+  .chip.agree { background: var(--agree-bg); color: var(--agree-ink); }
+  .chip.unknown { background: var(--unknown-bg); color: var(--unknown-ink); }
+  .jev { color: var(--jev); font-weight: 800; letter-spacing: -0.02em; }
+  svg.overlay { position: absolute; inset: 0; pointer-events: none; }
+
+  /* Redrawn Provider App window */
+  .window { overflow: hidden; padding-top: 42px; position: relative; }
+  .window .bar { position: absolute; left: 0; right: 0; top: 0; height: 42px; background: #f1f3f8; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 9px; padding-left: 18px; }
+  .window .bar i { width: 12px; height: 12px; border-radius: 50%; background: #d7dbe4; display: block; }
+  .window .bar span { margin-left: 12px; font-size: 15px; color: var(--muted); font-weight: 500; }
+  .mock { background: #f8f9fb; color: #1f2430; font-size: 16px; }
+  .mock .head { background: #fff; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+  .mock .head .row { display: flex; justify-content: space-between; align-items: center; }
+  .mock .head .t { font-size: 21px; font-weight: 800; }
+  .mock .head .s { font-size: 13px; color: #868e96; margin-top: 2px; }
+  .mock .status { border-radius: 999px; padding: 6px 15px; font-size: 14px; font-weight: 600; background: #ebfbee; color: #2f9e44; }
+  .mock .body { padding: 18px 22px 22px; }
+  .mock .rc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .mock .rc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .mock .rc-head b { font-size: 20px; font-weight: 700; }
+  .mock .rc-head .details { margin-left: auto; font-size: 13px; color: #1971c2; font-weight: 600; }
+  .mock .mchip { border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .mock .mchip.conflict { background: var(--conflict-bg); color: var(--conflict-ink); }
+  .mock .summary { font-size: 15.5px; margin-bottom: 12px; line-height: 1.45; }
+  .mock .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; font-size: 15px; line-height: 1.55; }
+  .mock .lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #868e96; margin-bottom: 5px; }
+  .mock .scores { margin-top: 14px; display: grid; grid-template-columns: 110px 1fr 70px; row-gap: 5px; font-size: 14px; }
+  .mock .scores span:nth-child(3n) { text-align: right; }
+  .mock .fine { font-size: 11.5px; color: #868e96; margin-top: 8px; }
+  .mock .actions { display: flex; gap: 10px; margin-top: 14px; }
+  .mock .actions div { border-radius: 8px; padding: 9px 14px; font-size: 14px; font-weight: 600; background: #e7f1ff; color: #1971c2; }
+  .ipin {
+    display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--vinta); color: #fff; vertical-align: middle;
+    font-size: 14px; font-weight: 800; align-items: center; justify-content: center; flex: none; margin: 0 4px;
+    box-shadow: 0 0 0 4px rgba(23, 83, 255, 0.18);
+  }
+  .pin {
+    position: absolute; width: 34px; height: 34px; border-radius: 50%; background: var(--vinta); color: #fff;
+    font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 5px rgba(23, 83, 255, 0.18), 0 8px 18px -6px rgba(23, 83, 255, 0.6);
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. The problem: the plan copied from the chart contradicts the discharge summary. -->
+<figure id="problem" style="height:560px">
+  <div class="headline" style="position:absolute;left:0;right:0;top:56px">The hospital changed the dose. The chart didn't.</div>
+  <div class="card" style="position:absolute;left:60px;top:190px;width:320px;padding:26px 28px">
+    <div class="eyebrow">Clinic chart · Medications</div>
+    <div style="font-size:24px;font-weight:700;margin:10px 0 12px">Active order</div>
+    <div style="font-size:22px;line-height:1.45;color:var(--body)">lisinopril <b>10 MG</b> Oral Tablet</div>
+    <div class="chip agree" style="margin-top:16px;font-size:13px">Active</div>
+  </div>
+  <div class="card" style="position:absolute;left:440px;top:190px;width:320px;padding:26px 28px">
+    <div class="eyebrow">Today's visit note</div>
+    <div style="font-size:24px;font-weight:700;margin:10px 0 12px">Plan</div>
+    <div style="font-size:22px;line-height:1.45;color:var(--body)"><mark>Continue lisinopril <b>10 mg</b> daily.</mark></div>
+  </div>
+  <div class="card" style="position:absolute;left:820px;top:190px;width:320px;padding:26px 28px">
+    <div class="eyebrow">Outside hospital</div>
+    <div style="font-size:24px;font-weight:700;margin:10px 0 12px">Discharge medications</div>
+    <div style="font-size:22px;line-height:1.45;color:var(--body)"><mark>Lisinopril increased from 10 mg to <b>20 mg</b> daily.</mark></div>
+  </div>
+  <svg class="overlay" viewBox="0 0 1200 560">
+    <defs><marker id="arr1" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1753ff"/></marker></defs>
+    <path d="M 384 290 L 432 290" stroke="#1753ff" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#arr1)"/>
+  </svg>
+  <div style="position:absolute;left:368px;top:252px;width:88px;text-align:center;font-size:15px;font-weight:700;color:var(--vinta)">copied</div>
+  <div style="position:absolute;left:754px;top:252px;width:72px;height:72px;border-radius:50%;background:var(--conflict);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 34px -10px rgba(232,89,12,0.65)">
+    <svg width="36" height="36" viewBox="0 0 46 46"><path d="M8 17h30M8 29h30M31 7L15 39" stroke="#fff" stroke-width="5.5" stroke-linecap="round" fill="none"/></svg>
+  </div>
+  <div class="sub" style="position:absolute;left:0;right:0;top:450px">Both doses live in prose, in documents written by different organizations.</div>
+</figure>
+
+<!-- 2. A typed question and its answer (adapted from the video's Jev scene). -->
+<figure id="typed-answer" style="height:700px">
+  <svg class="overlay" viewBox="0 0 1200 700">
+    <defs><linearGradient id="beam" x1="0" x2="1"><stop offset="0" stop-color="#1753ff" stop-opacity="0.2"/><stop offset="1" stop-color="#e0559b" stop-opacity="0.9"/></linearGradient>
+      <linearGradient id="beamr" x1="1" x2="0"><stop offset="0" stop-color="#1753ff" stop-opacity="0.2"/><stop offset="1" stop-color="#e0559b" stop-opacity="0.9"/></linearGradient></defs>
+    <path d="M 400 120 C 500 120, 470 230, 530 230" stroke="url(#beam)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M 800 120 C 700 120, 730 230, 670 230" stroke="url(#beamr)" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </svg>
+  <div class="card" style="position:absolute;left:60px;top:60px;width:340px;padding:22px 24px;font-size:21px;line-height:1.4">
+    <div class="eyebrow" style="margin-bottom:8px">Today's visit note</div>Plan: <mark>continue lisinopril 10 mg daily.</mark>
+  </div>
+  <div class="card" style="position:absolute;left:800px;top:60px;width:340px;padding:22px 24px;font-size:21px;line-height:1.4">
+    <div class="eyebrow" style="margin-bottom:8px">Discharge summary</div><mark>Lisinopril was increased from 10 mg to 20 mg.</mark>
+  </div>
+  <div style="position:absolute;left:520px;top:150px;width:160px;height:160px;border-radius:50%;
+       background:radial-gradient(circle at 35% 30%, #fff 0%, #fbe7f2 60%, #f6cfe3 100%);border:3px solid rgba(224,85,155,0.55);
+       display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+       box-shadow:0 0 0 14px rgba(224,85,155,0.10),0 24px 60px -18px rgba(224,85,155,0.65)">
+    <svg width="54" height="54" viewBox="0 0 54 54"><rect width="54" height="54" rx="14" fill="#e0559b"/>
+      <rect x="12" y="14" width="30" height="6" rx="3" fill="#fff" opacity="0.55"/><rect x="12" y="24" width="30" height="6" rx="3" fill="#fff"/><rect x="12" y="34" width="30" height="6" rx="3" fill="#fff" opacity="0.55"/></svg>
+    <b class="jev" style="font-size:30px">Jev</b>
+  </div>
+  <div style="position:absolute;left:80px;right:80px;top:340px;text-align:center;font-size:24px;font-weight:600;color:var(--body)">Do the note and the discharge summary agree on the lisinopril dose?</div>
+  <div style="position:absolute;left:190px;right:190px;top:398px;display:flex;flex-direction:column;gap:12px">
+    <div class="card" style="border-radius:14px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:22px;font-weight:600;box-shadow:none"><span>Agreement</span><span class="mono" style="color:var(--muted)">0.00</span></div>
+    <div class="card" style="position:relative;overflow:hidden;border-radius:14px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:22px;font-weight:700;border-color:rgba(232,89,12,0.6);box-shadow:0 12px 30px -12px rgba(232,89,12,0.5)">
+      <div style="position:absolute;inset:0;background:rgba(232,89,12,0.14)"></div><span style="position:relative">Potential conflict</span><span class="mono" style="position:relative">1.00</span></div>
+    <div class="card" style="border-radius:14px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:22px;font-weight:600;box-shadow:none"><span>Insufficient information</span><span class="mono" style="color:var(--muted)">0.00</span></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;top:614px;display:flex;justify-content:center">
+    <div class="mono" style="background:#121826;color:#e6edf7;border-radius:12px;padding:12px 20px;font-size:18px">
+      dose_0 → <span style="color:#ffb37a">"potential_conflict"</span> <span style="color:#8a94a6">· a value code can branch on</span></div>
+  </div>
+</figure>
+
+<!-- 3. The review card, annotated with the question behind each part. -->
+<figure id="review-card" style="height:720px">
+  <div class="card window" style="position:absolute;left:44px;top:44px;width:800px">
+    <div class="bar"><i></i><i></i><i></i><span>Medplum Provider · Visit</span></div>
+    <div class="mock">
+      <div class="head"><div class="row"><div><div class="t">Post-discharge follow-up</div><div class="s">9/29/2026 · Synthetic Rivera</div></div><div class="status">Finished</div></div></div>
+      <div class="body"><div class="rc">
+        <div class="rc-head"><b>Consistency check</b><span class="mchip conflict">Potential conflict</span><span class="ipin">1</span><span class="details">Hide details</span></div>
+        <div class="summary">Today's note and the discharge summary (Sep 22) disagree about lisinopril. <span id="rc-hosp">Today's note does not mention the hospital stay.</span><span class="ipin">2</span></div>
+        <div class="cols">
+          <div><div class="lbl">Outside document · Discharge summary · Sep 22</div>Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. <mark>Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.</mark> Follow-up: see primary care in one week for a blood pressure recheck.</div>
+          <div><div class="lbl">Today's visit note</div>Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. <mark>Plan: continue lisinopril 10 mg daily.</mark><span class="ipin">3</span> Recheck BP in 4 weeks.</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px"><div class="scores" style="flex:1"><span>lisinopril</span><span>Agreement</span><span>0.0%</span><span>lisinopril</span><span>Potential conflict</span><span>100.0%</span><span>lisinopril</span><span>Insufficient information</span><span>0.0%</span></div><span class="ipin" style="margin-top:12px">4</span></div>
+        <div class="fine">Confidence 1.00 · model jev-1.13.0 · 1069 input tokens. Scores are model probabilities, not validated clinical confidence.</div>
+        <div class="actions"><div>✎ Edit note</div><div>Sign with a documented reason</div><div>Create reconciliation task</div><span class="ipin" style="align-self:center">5</span></div>
+      </div></div>
+    </div>
+  </div>
+  <div style="position:absolute;left:880px;top:70px;width:290px;display:flex;flex-direction:column;gap:22px">
+    <div class="eyebrow" style="color:var(--vinta)">What each part comes from</div>
+    <div style="display:flex;gap:14px"><div class="pin" style="position:static;flex:none">1</div><div style="font-size:19px;line-height:1.4"><b>The label.</b> One Choice question per medication.</div></div>
+    <div style="display:flex;gap:14px"><div class="pin" style="position:static;flex:none">2</div><div style="font-size:19px;line-height:1.4"><b>The wording.</b> A yes/no question: does the note mention the hospital stay?</div></div>
+    <div style="display:flex;gap:14px"><div class="pin" style="position:static;flex:none">3</div><div style="font-size:19px;line-height:1.4"><b>The highlights.</b> One Choice per document over its numbered sentences.</div></div>
+    <div style="display:flex;gap:14px"><div class="pin" style="position:static;flex:none">4</div><div style="font-size:19px;line-height:1.4"><b>The scores.</b> Jev's distribution over the three labels, under Details.</div></div>
+    <div style="display:flex;gap:14px"><div class="pin" style="position:static;flex:none">5</div><div style="font-size:19px;line-height:1.4"><b>The decision.</b> Always the provider's. No Dismiss, and signing is never blocked.</div></div>
+  </div>
+</figure>
+
+<!-- 4. The four scenario notes and what the card says for each. -->
+<figure id="side-paths" style="height:640px">
+  <div class="headline" style="position:absolute;left:0;right:0;top:50px">Four notes, three answers</div>
+  <div style="position:absolute;left:70px;right:70px;top:140px;display:flex;flex-direction:column;gap:18px">
+    <div class="card" style="display:grid;grid-template-columns:560px 1fr;align-items:center;padding:20px 26px;gap:24px">
+      <div style="font-size:20px;line-height:1.4"><span class="eyebrow" style="font-size:13px;display:block;margin-bottom:4px">Plan copied from the chart</span><mark>Plan: continue lisinopril 10 mg daily.</mark></div>
+      <div><span class="chip conflict">Potential conflict</span><div style="font-size:17px;color:var(--muted);margin-top:8px">The hospital raised it to 20 mg.</div></div>
+    </div>
+    <div class="card" style="display:grid;grid-template-columns:560px 1fr;align-items:center;padding:20px 26px;gap:24px">
+      <div style="font-size:20px;line-height:1.4"><span class="eyebrow" style="font-size:13px;display:block;margin-bottom:4px">Change acknowledged</span><mark>Lisinopril increased to 20 mg daily at discharge; continue 20 mg.</mark></div>
+      <div><span class="chip agree">Agreement</span><div style="font-size:17px;color:var(--muted);margin-top:8px">The later note explains the change.</div></div>
+    </div>
+    <div class="card" style="display:grid;grid-template-columns:560px 1fr;align-items:center;padding:20px 26px;gap:24px">
+      <div style="font-size:20px;line-height:1.4"><span class="eyebrow" style="font-size:13px;display:block;margin-bottom:4px">No dose</span><mark>Plan: continue lisinopril.</mark></div>
+      <div><span class="chip unknown">Insufficient information</span><div style="font-size:17px;color:var(--muted);margin-top:8px">Missing, not wrong.</div></div>
+    </div>
+    <div class="card" style="display:grid;grid-template-columns:560px 1fr;align-items:center;padding:20px 26px;gap:24px">
+      <div style="font-size:20px;line-height:1.4"><span class="eyebrow" style="font-size:13px;display:block;margin-bottom:4px">Unexplained new dose</span><mark>Plan: increase lisinopril to 40 mg daily.</mark></div>
+      <div><span class="chip conflict">Potential conflict</span><div style="font-size:17px;color:var(--muted);margin-top:8px">Any unexplained difference is flagged.</div></div>
+    </div>
+  </div>
+</figure>
+
+<!-- 5. Architecture (replaces the Mermaid flowchart). -->
+<figure id="architecture" style="height:640px">
+  <div style="position:absolute;left:36px;top:36px;width:790px;height:568px;border:2px dashed #b9c3da;border-radius:24px;background:rgba(255,255,255,0.35)"></div>
+  <div class="eyebrow" style="position:absolute;left:62px;top:52px;color:var(--vinta)">Your Medplum project</div>
+  <div class="eyebrow" style="position:absolute;left:880px;top:52px;color:var(--jev)">Decision model</div>
+
+  <div class="card" style="position:absolute;left:66px;top:96px;width:320px;height:180px;padding:22px 24px">
+    <div style="display:flex;align-items:center;gap:12px"><div class="pin" style="position:static;width:30px;height:30px;font-size:15px">1</div><b style="font-size:21px">Provider App</b></div>
+    <div style="font-size:18px;line-height:1.45;color:var(--body);margin-top:12px">The provider writes the note and sets the visit to <b>Finished</b>, or presses <b>Check note</b>.</div>
+  </div>
+  <div class="card" style="position:absolute;left:476px;top:96px;width:320px;height:180px;padding:22px 24px">
+    <div style="display:flex;align-items:center;gap:12px"><div class="pin" style="position:static;width:30px;height:30px;font-size:15px">2</div><b style="font-size:21px">Medplum Bot</b></div>
+    <div style="font-size:18px;line-height:1.45;color:var(--body);margin-top:12px">Runs <b>as the signed-in user</b>. Reads the note, active medications and discharge summary. Writes nothing.</div>
+  </div>
+  <div class="card" style="position:absolute;left:476px;top:392px;width:320px;height:180px;padding:22px 24px">
+    <div style="display:flex;align-items:center;gap:12px"><div class="pin" style="position:static;width:30px;height:30px;font-size:15px">4</div><b style="font-size:21px">Review card</b></div>
+    <div style="font-size:18px;line-height:1.45;color:var(--body);margin-top:12px">Shows the label and both passages. The provider edits, signs with a reason, or creates a task.</div>
+  </div>
+  <div class="card" style="position:absolute;left:66px;top:392px;width:320px;height:180px;padding:22px 24px">
+    <div style="display:flex;align-items:center;gap:12px"><div class="pin" style="position:static;width:30px;height:30px;font-size:15px">5</div><b style="font-size:21px">FHIR records</b></div>
+    <div class="mono" style="font-size:16px;line-height:1.7;color:var(--body);margin-top:10px">DetectedIssue<br>Provenance · Task</div>
+    <div style="font-size:16px;color:var(--muted);margin-top:4px">written as the provider</div>
+  </div>
+  <div class="card" style="position:absolute;left:870px;top:96px;width:296px;height:180px;padding:22px 24px;border-color:rgba(224,85,155,0.5)">
+    <div style="display:flex;align-items:center;gap:12px"><div class="pin" style="position:static;width:30px;height:30px;font-size:15px;background:var(--jev);box-shadow:0 0 0 5px rgba(224,85,155,0.18)">3</div><b style="font-size:21px">Hosted <span class="jev">Jev</span></b></div>
+    <div style="font-size:18px;line-height:1.45;color:var(--body);margin-top:12px">Typed questions in. Labels, probabilities and the sentences to highlight out.</div>
+  </div>
+  <div style="position:absolute;left:870px;top:392px;width:296px;height:180px;padding:22px 24px;border:2px dashed rgba(224,85,155,0.45);border-radius:20px;background:rgba(255,255,255,0.5)">
+    <b style="font-size:19px">or Decider on Modal</b>
+    <div style="font-size:17px;line-height:1.45;color:var(--muted);margin-top:10px">An open checkpoint on a private GPU, chosen by one project secret.</div>
+  </div>
+
+  <svg class="overlay" viewBox="0 0 1200 640">
+    <defs>
+      <marker id="ab" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1753ff"/></marker>
+      <marker id="ap" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e0559b"/></marker>
+    </defs>
+    <path d="M 390 186 L 466 186" stroke="#1753ff" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ab)"/>
+    <path d="M 800 166 L 860 166" stroke="#e0559b" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ap)"/>
+    <path d="M 866 206 L 806 206" stroke="#e0559b" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ap)"/>
+    <path d="M 636 280 L 636 382" stroke="#1753ff" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ab)"/>
+    <path d="M 472 482 L 396 482" stroke="#1753ff" stroke-width="4" fill="none" stroke-linecap="round" marker-end="url(#ab)"/>
+    <path d="M 1018 280 L 1018 382" stroke="#e0559b" stroke-width="3" stroke-dasharray="3 9" fill="none" stroke-linecap="round"/>
+  </svg>
+  <div style="position:absolute;left:652px;top:314px;font-size:15px;font-weight:700;color:var(--vinta)">result, no writes</div>
+
+  <div style="position:absolute;left:870px;top:584px;width:296px;font-size:14px;color:var(--muted)">The API key is a Medplum project secret. It never reaches the browser.</div>
+</figure>
+
+<!-- 6. What each provider choice records in FHIR (adapted from the video's decision scene). -->
+<figure id="fhir-records" style="height:660px">
+  <div class="headline" style="position:absolute;left:0;right:0;top:48px">The provider decides. FHIR remembers.</div>
+  <div class="card" style="position:absolute;left:70px;right:70px;top:130px;padding:22px 28px;display:flex;align-items:center;gap:22px">
+    <div class="mono" style="font-size:20px;font-weight:600;color:var(--vinta);flex:none">DetectedIssue</div>
+    <div style="font-size:19px;line-height:1.45;color:var(--body)">Every check. Points to the visit, the exact note version and the outside document. Holds labels, probabilities and sentence positions, <b>no copied chart text</b>.</div>
+  </div>
+  <div style="position:absolute;left:70px;right:70px;top:282px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
+    <div class="card" style="padding:26px 26px 28px;height:262px">
+      <div style="width:54px;height:54px;border-radius:15px;background:#e8efff;display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1753ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></div>
+      <div style="font-size:23px;font-weight:700;margin:16px 0 10px">Edit the note</div>
+      <div style="font-size:18px;line-height:1.45;color:var(--body)">The card marks the old check stale. <b>Check note</b> stores a new DetectedIssue for the new text.</div>
+    </div>
+    <div class="card" style="padding:26px 26px 28px;height:262px">
+      <div style="width:54px;height:54px;border-radius:15px;background:#e8efff;display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1753ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-5 5-9 7-9 2.5 0-1 9 1.5 9 1.5 0 2.5-3 4-3 1.2 0 1 2 2.5 2H21"/><path d="M3 21h18"/></svg></div>
+      <div style="font-size:23px;font-weight:700;margin:16px 0 10px">Sign with a reason</div>
+      <div style="font-size:18px;line-height:1.45;color:var(--body)">The reason goes on the signature <span class="mono" style="font-size:16px">Provenance</span>, and a mitigation on the DetectedIssue.</div>
+    </div>
+    <div class="card" style="padding:26px 26px 28px;height:262px">
+      <div style="width:54px;height:54px;border-radius:15px;background:#e8efff;display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1753ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 13.5l2 2 4-4"/></svg></div>
+      <div style="font-size:23px;font-weight:700;margin:16px 0 10px">Create a task</div>
+      <div style="font-size:18px;line-height:1.45;color:var(--body)">A reconciliation <span class="mono" style="font-size:16px">Task</span> without <span class="mono" style="font-size:16px">Task.encounter</span>, so Sign &amp; Lock leaves it open.</div>
+    </div>
+  </div>
+  <div style="position:absolute;left:0;right:0;top:586px;text-align:center;font-size:22px;font-weight:600;color:var(--body)">The model never changes the chart.</div>
+</figure>
+
+<!-- 7. Hosted Jev on nine synthetic inputs. -->
+<figure id="results" style="height:690px">
+  <div style="position:absolute;left:60px;top:60px;width:300px">
+    <div class="eyebrow">Hosted Jev · Sep 24, 2026</div>
+    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:18px;line-height:1">8<span style="color:var(--muted);font-size:56px"> / 9</span></div>
+    <div style="font-size:21px;color:var(--body);margin-top:6px">labels match the expected answer</div>
+    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:40px;line-height:1">18<span style="color:var(--muted);font-size:56px"> / 18</span></div>
+    <div style="font-size:21px;color:var(--body);margin-top:6px">highlights on the right sentence</div>
+    <div style="font-size:16px;color:var(--muted);margin-top:40px;line-height:1.5">Model <span class="mono">jev-1.13.0</span>. Synthetic text, author's labels. Integration evidence, not a clinical benchmark.</div>
+  </div>
+  <div class="card" style="position:absolute;left:390px;top:50px;width:760px;padding:18px 26px 12px">
+    <div style="display:grid;grid-template-columns:1fr 200px 110px 34px;gap:14px;align-items:center;padding:8px 0 12px;border-bottom:1px solid var(--line)" class="eyebrow">
+      <span style="font-size:13px">Input</span><span style="font-size:13px">Jev's answer</span><span style="font-size:13px">p</span><span></span>
+    </div>
+    <div id="rows"></div>
+  </div>
+</figure>
+
+<!-- 8. Highlight question wording: 18 highlights per wording. -->
+<figure id="highlight-wording" style="height:510px">
+  <div class="eyebrow" style="position:absolute;left:60px;top:52px">Which sentence gives the lisinopril dose…</div>
+  <div id="wording" style="position:absolute;left:60px;right:60px;top:100px;display:flex;flex-direction:column;gap:16px"></div>
+  <div style="position:absolute;left:60px;top:452px;display:flex;gap:26px;font-size:16px;color:var(--muted);align-items:center">
+    <span style="display:flex;align-items:center;gap:8px"><i style="display:block;width:18px;height:18px;border-radius:5px;background:var(--agree)"></i>right sentence</span>
+    <span style="display:flex;align-items:center;gap:8px"><i style="display:block;width:18px;height:18px;border-radius:5px;border:2.5px solid var(--conflict);background:#fff"></i>missed</span>
+    <span>9 inputs × 2 documents</span>
+  </div>
+</figure>
+
+<!-- 9. Hosted Jev or self-hosted Decider (replaces the comparison table). -->
+<figure id="backends" style="height:620px">
+  <div style="position:absolute;left:0;right:0;top:40px;display:flex;justify-content:center">
+    <div class="mono" style="background:#121826;color:#e6edf7;border-radius:12px;padding:10px 18px;font-size:18px">CONSISTENCY_BACKEND = <span style="color:#ffb37a">typesafe</span> | <span style="color:#ffb37a">modal</span></div>
+  </div>
+  <div id="backend-cards" style="position:absolute;left:60px;right:60px;top:110px;display:grid;grid-template-columns:1fr 1fr;gap:28px"></div>
+</figure>
+
+<!-- 10. Poster for the full demo video. The frame is injected by render_figures.py. -->
+<figure id="demo-poster" style="height:740px">
+  <div class="card window" style="position:absolute;left:90px;top:44px;width:1020px">
+    <div class="bar"><i></i><i></i><i></i><span>Medplum Provider · Guided demo</span></div>
+    <img id="demo-frame" alt="" style="display:block;width:1020px;height:574px;object-fit:cover">
+  </div>
+  <div style="position:absolute;left:540px;top:313px;width:120px;height:120px;border-radius:50%;background:rgba(23,83,255,0.94);
+       display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 16px rgba(23,83,255,0.18),0 24px 50px -16px rgba(11,42,138,0.8)">
+    <svg width="48" height="54" viewBox="0 0 48 54"><path d="M8 4 L44 27 L8 50 Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>
+  </div>
+  <div style="position:absolute;left:0;right:0;top:682px;text-align:center;font-size:26px;font-weight:700">Watch the full guided demo <span style="color:var(--muted);font-weight:500">· 2 min</span></div>
+</figure>
+
+<script>
+// Measured on September 24, 2026 (npm --prefix provider run measure); see ARTICLE.md.
+const LABEL = {
+  potential_conflict: ['conflict', 'Potential conflict'],
+  agreement: ['agree', 'Agreement'],
+  insufficient_information: ['unknown', 'Insufficient information'],
+};
+const RESULTS = [
+  ['Same discharge, 10 mg vs 20 mg', 'potential_conflict', 'potential_conflict', 1.00],
+  ['Same dose, different wording', 'agreement', 'agreement', 1.00],
+  ['Explicit dated change', 'agreement', 'agreement', 0.96],
+  ['Dose missing in one document', 'insufficient_information', 'insufficient_information', 0.99],
+  ['Dated lists, unexplained change', 'insufficient_information', 'potential_conflict', 1.00],
+  ['Scenario: plan copied from the chart', 'potential_conflict', 'potential_conflict', 1.00],
+  ['Scenario: note acknowledges the change', 'agreement', 'agreement', 1.00],
+  ['Scenario: no dose', 'insufficient_information', 'insufficient_information', 0.88],
+  ['Scenario: unexplained 40 mg', 'potential_conflict', 'potential_conflict', 0.80],
+];
+const COLOR = { conflict: 'var(--conflict)', agree: 'var(--agree)', unknown: 'var(--unknown)' };
+document.getElementById('rows').innerHTML = RESULTS.map(([name, expected, got, p]) => {
+  const [cls, text] = LABEL[got];
+  const ok = expected === got;
+  const note = ok ? '' : `<div style="font-size:14px;color:var(--conflict-ink);margin-top:3px">Expected ${LABEL[expected][1].toLowerCase()}: a definition difference</div>`;
+  return `<div style="display:grid;grid-template-columns:1fr 200px 110px 34px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid #eef1f6">
+    <div style="font-size:18px;line-height:1.3">${name}${note}</div>
+    <div><span class="chip ${cls}" style="font-size:12px;padding:5px 11px">${text}</span></div>
+    <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;border-radius:4px;background:#eef1f6;overflow:hidden">
+      <div style="width:${p * 100}%;height:100%;border-radius:4px;background:${COLOR[cls]}"></div></div><span class="mono" style="font-size:14px;color:var(--muted)">${p.toFixed(2)}</span></div>
+    <div style="font-size:22px;font-weight:800;text-align:center;color:${ok ? 'var(--agree-ink)' : 'var(--conflict-ink)'}">${ok ? '✓' : '✗'}</div>
+  </div>`;
+}).join('');
+
+const WORDINGS = [
+  ['“…the current dose”', 17, false],
+  ['“…going forward, including a new or changed dose”', 16, false],
+  ['“…the dose as the plan, whether continued, new or changed”', 18, true],
+  ['“…a dose”', 18, false],
+];
+document.getElementById('wording').innerHTML = WORDINGS.map(([text, hits, used]) => {
+  const squares = Array.from({ length: 18 }, (_, i) => i < hits
+    ? '<i style="display:block;width:20px;height:20px;border-radius:6px;background:var(--agree)"></i>'
+    : '<i style="display:block;width:20px;height:20px;border-radius:6px;border:2.5px solid var(--conflict);background:#fff"></i>').join('');
+  const tag = used ? '<span class="chip" style="background:#e8efff;color:var(--vinta);font-size:12px;padding:4px 10px;margin-left:12px">Used by the Bot</span>' : '';
+  return `<div class="card" style="display:grid;grid-template-columns:450px 1fr 64px;align-items:center;padding:16px 22px;gap:18px;${used ? 'border-color:rgba(23,83,255,0.45)' : 'box-shadow:none'}">
+    <div style="font-size:19px;font-weight:${used ? 700 : 500}">${text}${tag}</div>
+    <div style="display:flex;gap:4px">${squares}</div>
+    <div class="mono" style="font-size:18px;text-align:right;color:var(--body)">${hits}/18</div>
+  </div>`;
+}).join('');
+
+const BACKENDS = [
+  { title: 'Hosted <span class="jev">Jev</span>', tag: ['agree', 'Default · runs the guided demo'], accent: 'rgba(224,85,155,0.5)', rows: [
+    ['Model', 'TypeSafe\'s proprietary model behind <span class="mono" style="font-size:15px">POST /v1/systemone</span>'],
+    ['Input', 'Named JSON state and typed questions built from chart text'],
+    ['Setup', 'An API key in Medplum project secrets'],
+    ['Cost', 'Per request'],
+    ['PHI path', 'Needs a BAA or DPA with TypeSafe'],
+  ] },
+  { title: 'Decider on Modal', tag: ['unknown', 'One verified prediction'], accent: '#d5dbe8', rows: [
+    ['Model', 'Open Apache-2.0 checkpoint on a private Modal GPU Server'],
+    ['Input', 'A fixed case id today; a text contract is next'],
+    ['Setup', 'Weight staging, a GPU Server, proxy tokens, cold starts'],
+    ['Cost', 'About $4.29 per warm GPU hour at list prices, scales to zero'],
+    ['PHI path', 'Modal Enterprise BAA plus Medplum\'s BAA plan'],
+  ] },
+];
+document.getElementById('backend-cards').innerHTML = BACKENDS.map((b) => `
+  <div class="card" style="padding:28px 30px;border-color:${b.accent}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><b style="font-size:28px;letter-spacing:-0.02em">${b.title}</b>
+      <span class="chip ${b.tag[0]}" style="font-size:12px;padding:5px 11px">${b.tag[1]}</span></div>
+    <div style="margin-top:20px;display:flex;flex-direction:column">${b.rows.map(([k, v]) => `
+      <div style="display:grid;grid-template-columns:100px 1fr;gap:14px;padding:13px 0;border-top:1px solid #eef1f6">
+        <span class="eyebrow" style="font-size:13px;padding-top:3px">${k}</span><span style="font-size:18px;line-height:1.4;color:var(--body)">${v}</span></div>`).join('')}
+    </div>
+  </div>`).join('');
+</script>
+</body>
+</html>

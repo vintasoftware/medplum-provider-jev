@@ -1,0 +1,238 @@
+{
+  "resourceType": "AccessPolicy",
+  "name": "Guided demo practitioner (synthetic project)",
+  "resource": [
+    {
+      "resourceType": "Patient",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Appointment",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Slot",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update"
+      ]
+    },
+    {
+      "resourceType": "Encounter",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "ClinicalImpression",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "MedicationRequest",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "DocumentReference",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Binary",
+      "interaction": [
+        "create",
+        "read"
+      ]
+    },
+    {
+      "resourceType": "DetectedIssue",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Task",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Provenance",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "vread",
+        "history"
+      ]
+    },
+    {
+      "resourceType": "Condition",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update"
+      ]
+    },
+    {
+      "resourceType": "ChargeItem",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update"
+      ]
+    },
+    {
+      "resourceType": "AllergyIntolerance",
+      "readonly": true
+    },
+    {
+      "resourceType": "CodeSystem",
+      "readonly": true
+    },
+    {
+      "resourceType": "Communication",
+      "readonly": true
+    },
+    {
+      "resourceType": "Coverage",
+      "readonly": true
+    },
+    {
+      "resourceType": "Device",
+      "readonly": true
+    },
+    {
+      "resourceType": "DeviceRequest",
+      "readonly": true
+    },
+    {
+      "resourceType": "DiagnosticReport",
+      "readonly": true
+    },
+    {
+      "resourceType": "Goal",
+      "readonly": true
+    },
+    {
+      "resourceType": "Immunization",
+      "readonly": true
+    },
+    {
+      "resourceType": "Media",
+      "readonly": true
+    },
+    {
+      "resourceType": "MedicationStatement",
+      "readonly": true
+    },
+    {
+      "resourceType": "Observation",
+      "readonly": true
+    },
+    {
+      "resourceType": "Organization",
+      "readonly": true
+    },
+    {
+      "resourceType": "PlanDefinition",
+      "readonly": true
+    },
+    {
+      "resourceType": "Practitioner",
+      "readonly": true
+    },
+    {
+      "resourceType": "PractitionerRole",
+      "readonly": true
+    },
+    {
+      "resourceType": "Schedule",
+      "readonly": true
+    },
+    {
+      "resourceType": "SearchParameter",
+      "readonly": true
+    },
+    {
+      "resourceType": "ServiceRequest",
+      "readonly": true
+    },
+    {
+      "resourceType": "StructureDefinition",
+      "readonly": true
+    },
+    {
+      "resourceType": "ValueSet",
+      "readonly": true
+    },
+    {
+      "resourceType": "Bot",
+      "criteria": "Bot?_id=BOT_ID",
+      "readonly": true
+    },
+    {
+      "resourceType": "Subscription",
+      "criteria": "Subscription?type=websocket&author=%profile",
+      "interaction": [
+        "create",
+        "read",
+        "search",
+        "update",
+        "delete"
+      ]
+    }
+  ]
+}

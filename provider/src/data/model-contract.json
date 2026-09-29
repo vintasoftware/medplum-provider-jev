@@ -1,0 +1,33 @@
+{
+  "endpoint": "https://api.typesafe.ai/v1/systemone",
+  "model": "jev-latest",
+  "labels": [
+    "agreement",
+    "potential_conflict",
+    "insufficient_information"
+  ],
+  "limits": {
+    "text_max": 4000,
+    "title_max": 120,
+    "total_text_max": 7000,
+    "max_medications": 5,
+    "max_sentences": 40
+  },
+  "questions": {
+    "dose": {
+      "instructions": "Do `outside_document.text` and `visit_note.text` agree about the current dose and frequency of {medication}? `visit_note` was written after `outside_document`.",
+      "criteria": {
+        "agreement": "Both documents state a compatible dose and frequency for {medication}, or the later document explicitly acknowledges the change described in the earlier one.",
+        "potential_conflict": "The documents state different doses or frequencies for {medication} as the current plan, and the later document does not acknowledge a change.",
+        "insufficient_information": "At least one document does not state a dose or frequency for {medication}, or does not mention it."
+      }
+    },
+    "hospital": {
+      "instructions": "Does `visit_note.text` refer to the hospital stay or to the discharge summary?"
+    },
+    "sentence": {
+      "instructions": "Which sentence of `{field}.text` gives the dose of {medication} as the plan, whether it is continued, new or changed?",
+      "none": "No sentence states a dose of {medication}."
+    }
+  }
+}

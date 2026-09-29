@@ -1,0 +1,1963 @@
+// SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
+// SPDX-License-Identifier: Apache-2.0
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Container,
+  Divider,
+  Group,
+  Input,
+  NumberInput,
+  Radio,
+  ScrollArea,
+  Select,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
+import type { MedicationOrderDrugInput, MedplumClient, WithId } from '@medplum/core';
+import {
+  buildMedicationRequestResponseLostStatusReason,
+  createReference,
+  getCodeBySystem,
+  getExtensionValue,
+  getIdentifier,
+  getPreferredPharmaciesFromPatient,
+  getReferenceString,
+  isDefined,
+  isOk,
+  NDC,
+  normalizeOperationOutcome,
+  OperationOutcomeError,
+  resolveId,
+  RXNORM,
+} from '@medplum/core';
+import type {
+  Condition,
+  Coverage,
+  Medication,
+  MedicationRequest,
+  OperationOutcome,
+  Organization,
+  Patient,
+  Practitioner,
+  Reference,
+  Resource,
+} from '@medplum/fhirtypes';
+import type { AsyncAutocompleteOption } from '@medplum/react';
+import {
+  AsyncAutocomplete,
+  OperationOutcomeAlert,
+  Panel,
+  ResourceInput,
+  useMedplum,
+  useMedplumProfile,
+  useResource,
+} from '@medplum/react';
+import { useSearchResources } from '@medplum/react-hooks';
+import {
+  loadScriptSureQuantityQualifiers,
+  SCRIPTSURE_GCN_SEQNO_SYSTEM,
+  SCRIPTSURE_GENERIC_NAME_EXTENSION,
+  SCRIPTSURE_NAME_TYPE_EXTENSION,
+  SCRIPTSURE_ROUTED_MED_ID_SYSTEM,
+  SCRIPTSURE_SIG_EXTENSION,
+  useScriptSureOrderMedication,
+} from '@medplum/scriptsure-react';
+import { IconShoppingCart } from '@tabler/icons-react';
+import type { JSX, ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router';
+import type { DispenseUnitNameResolver, QualifierMatcher } from '../../components/meds/quantity-qualifiers';
+import {
+  buildDispenseUnitNameResolver,
+  buildQualifierMatcher,
+  DEFAULT_QUANTITY_QUALIFIER,
+  mergeQuantityQualifierCatalog,
+  resolveQuantityQualifier,
+  STATIC_DISPENSE_UNIT_NAME_RESOLVER,
+  STATIC_QUALIFIER_MATCHER,
+} from '../../components/meds/quantity-qualifiers';
+import { ScriptSurePracticeSwitcher, useScriptSurePractice } from '../../scriptsure/ScriptSurePractice';
+import {
+  getDisplayNameFromMedication,
+  getGcnSeqnosFromMedication,
+  getUnambiguousGcnSeqnoFromMedication,
+  getVendorKeyFromMedication,
+} from '../../utils/medication-gcn';
+import { showErrorNotification } from '../../utils/notifications';
+import { OrderSetTabPanel } from './OrderSetTabPanel';
+
+function todayYmd(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export interface OrderMedicationPageProps {
+  /** When set (e.g. from the patient chart), the form shows and uses this patient immediately. */
+  patient?: Patient;
+  /**
+   * Existing replacement draft created from a failed prescription. The form is
+   * pre-filled from this resource and updates it in place before launching the
+   * ScriptSure order flow, preserving `priorPrescription` and Task linkage.
+   */
+  replacementMedicationRequest?: WithId<MedicationRequest>;
+  onOrderComplete?: (result: { launchUrl: string; medicationRequestId?: string }) => void;
+  /**
+   * When provided, the single-medication tab shows an **Add to cart** action that
+   * creates the draft `MedicationRequest` (same shape as "Prescribe this
+   * medication") **without** calling `$order-medication` or opening a widget. The
+   * parent collects these drafts as a cart and checks them out together via the
+   * Approve Queue flow. Called with the created draft on success.
+   */
+  onAddedToCart?: (medicationRequest: WithId<MedicationRequest>) => void;
+  /**
+   * Optional cart-hook `addToCart` from the parent (shared with Draft-tab
+   * checkout so pending adds can block checkout). When omitted, Add to cart
+   * falls back to `medplum.createResource`.
+   */
+  persistCartDraft?: (medicationRequest: MedicationRequest) => Promise<MedicationRequest>;
+  /**
+   * Parent `useScriptSureCart().adding` when {@link persistCartDraft} is wired
+   * from a shared cart hook instance.
+   */
+  cartAdding?: boolean;
+  /**
+   * Number of medications already in the patient's cart (draft MRs). Shown as a
+   * contextual indicator next to the actions so the prescriber knows the
+   * single-med "Prescribe this medication" action does **not** send the cart.
+   * Only meaningful when {@link onAddedToCart} is set.
+   */
+  cartCount?: number;
+}
+
+function medicationRequestToEditableMedication(medicationRequest: MedicationRequest): Medication {
+  return {
+    resourceType: 'Medication',
+    id: medicationRequest.id ? `replacement-${medicationRequest.id}` : undefined,
+    code: medicationRequest.medicationCodeableConcept,
+  };
+}
+
+function dateToYmd(value: string | undefined, fallback = ''): string {
+  return value?.slice(0, 10) ?? fallback;
+}
+
+function narrowReference<T extends Resource>(
+  reference: Reference | undefined,
+  resourceType: T['resourceType']
+): Reference<T> | undefined {
+  if (!reference?.reference?.startsWith(`${resourceType}/`)) {
+    return undefined;
+  }
+  return {
+    reference: reference.reference,
+    type: reference.type,
+    identifier: reference.identifier,
+    display: reference.display,
+  };
+}
+
+function getRoutedMedIdFromMedication(m: Medication): number | undefined {
+  return getVendorKeyFromMedication(m, SCRIPTSURE_ROUTED_MED_ID_SYSTEM);
+}
+
+function normalizeNdcDigits(ndc: string | undefined): string | undefined {
+  if (!ndc) {
+    return undefined;
+  }
+  const digits = ndc.replaceAll(/\D/g, '');
+  return digits.length > 0 ? digits : undefined;
+}
+
+/**
+ * Stable key for search deduplication and AsyncAutocomplete option values (avoids duplicate rows).
+ *
+ * NDC and RxNorm are checked **before** routed-med-id because format lookups
+ * (`searchMedications({ routedMedId })`) return many strengths sharing the same
+ * routed-med-id — keying by routed-med-id alone would collapse every strength
+ * into a single option. Routed-med-id is only the fallback for high-level
+ * name-search rows that have no NDC / RxNorm yet.
+ * @param m - In-memory Medication from drug search / format lookup.
+ * @returns Dedupe key (NDC, RxNorm, routed id, or text/json fallback).
+ */
+function medicationDedupeKey(m: Medication): string {
+  const ndc = (m.code && getCodeBySystem(m.code, NDC)) ?? getIdentifier(m, NDC);
+  const nd = normalizeNdcDigits(ndc);
+  if (nd) {
+    return `ndc:${nd}`;
+  }
+  const rx = (m.code && getCodeBySystem(m.code, RXNORM)) ?? getIdentifier(m, RXNORM);
+  if (rx) {
+    return `rx:${rx.trim()}`;
+  }
+  const rid = getRoutedMedIdFromMedication(m);
+  if (rid !== undefined) {
+    return `routed:${rid}`;
+  }
+  const text = m.code?.text?.trim();
+  if (text) {
+    return `text:${text.toLowerCase()}`;
+  }
+  return `json:${JSON.stringify(m.code ?? {})}`;
+}
+
+function dedupeMedications(list: Medication[]): Medication[] {
+  const map = new Map<string, Medication>();
+  for (const m of list) {
+    const k = medicationDedupeKey(m);
+    if (!map.has(k)) {
+      map.set(k, m);
+    }
+  }
+  return [...map.values()];
+}
+
+/**
+ * Verb keywords that introduce a dose amount in English sigs (e.g. "Take 1
+ * tablet …", "Apply 2 patches …").
+ */
+const SIG_DOSE_VERB_RE = /\b(?:take|apply|use|inject|inhale|instill|insert|chew|dissolve|spray)\b/;
+
+/**
+ * Captures `<low>(?:[-/to] <high>)?` after a verb. Matches against the substring
+ * that follows the verb to avoid one large regex.
+ */
+const SIG_DOSE_RANGE_RE = /^\s+(\d+(?:\.\d+)?)(?:\s*(?:-|to)\s*(\d+(?:\.\d+)?))?/;
+
+const SIG_QID_RE = /\bqid\b|four\s+times|\b4\s*x\b/;
+const SIG_TID_RE = /\btid\b|three\s+times|\b3\s*x\b/;
+const SIG_BID_RE = /\bbid\b|twice/;
+const SIG_DAILY_RE = /once\s+(?:a\s+)?day|once\s+daily|every\s+day|\bqd\b|\bqday\b|\bdaily\b/;
+
+/**
+ * English numbers that ScriptSure routinely spells out in canonical sigs
+ * (e.g. "every eight hours" rather than "every 8 hours"). We convert these
+ * back to digits before the interval regexes so days-supply inference works
+ * regardless of which form the upstream sig text uses.
+ */
+const SIG_NUMBER_WORDS: Readonly<Record<string, number>> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  twenty: 20,
+  twentyfour: 24,
+  'twenty-four': 24,
+  'twenty four': 24,
+  thirty: 30,
+  forty: 40,
+  fortyeight: 48,
+  'forty-eight': 48,
+  'forty eight': 48,
+  seventytwo: 72,
+  'seventy-two': 72,
+  'seventy two': 72,
+};
+
+const SIG_NUMBER_WORDS_ALTERNATION = Object.keys(SIG_NUMBER_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .map((w) => w.replaceAll(/[ -]/g, '[ -]'))
+  .join('|');
+const SIG_NUMBER_WORDS_RE = new RegExp(String.raw`\b(?:${SIG_NUMBER_WORDS_ALTERNATION})\b`, 'gi');
+
+/**
+ * Replaces spelled-out English numbers with digits in `text` so the interval
+ * regexes can capture them. Idempotent on text that already uses digits.
+ *
+ * `SIG_NUMBER_WORDS_RE` carries the `i` flag and every match is lowercased
+ * before lookup, so input casing does not matter.
+ *
+ * @param text - Sig line text (any case).
+ * @returns Same line with word-form numbers swapped for digit form.
+ */
+function digitizeSigNumberWords(text: string): string {
+  return text.replace(SIG_NUMBER_WORDS_RE, (match) => {
+    const key = match.toLowerCase();
+    const direct = SIG_NUMBER_WORDS[key];
+    if (direct !== undefined) {
+      return String(direct);
+    }
+    const collapsed = key.replaceAll(/[ -]/g, '');
+    const collapsedHit = SIG_NUMBER_WORDS[collapsed];
+    return collapsedHit === undefined ? match : String(collapsedHit);
+  });
+}
+
+const SIG_EVERY_HOURS_RE = /every\s+(\d+(?:\.\d+)?)\s*(?:hr|hour|hours)\b|\bq(\d+)h\b/;
+const SIG_EVERY_DAYS_RE = /every\s+(\d+(?:\.\d+)?)\s*(?:d|day|days)\b/;
+
+/**
+ * Extracts the per-dose amount from a sig (e.g. "take 2 tablets" → `2`,
+ * "apply 1-2 patches" → `2` taking the high end of the range).
+ *
+ * @param text - Lowercased sig line.
+ * @returns Per-dose amount; defaults to 1 when no verb / number is found.
+ */
+function inferPerDoseFromSig(text: string): number {
+  const verbMatch = SIG_DOSE_VERB_RE.exec(text);
+  if (verbMatch?.index === undefined) {
+    return 1;
+  }
+  const after = text.slice(verbMatch.index + verbMatch[0].length);
+  const range = SIG_DOSE_RANGE_RE.exec(after);
+  if (!range) {
+    return 1;
+  }
+  const lo = Number.parseFloat(range[1]);
+  const hi = range[2] ? Number.parseFloat(range[2]) : lo;
+  return Number.isFinite(hi) && hi > 0 ? hi : lo;
+}
+
+/**
+ * Maps frequency keywords (qid/tid/bid/daily) to doses-per-day.
+ *
+ * @param text - Lowercased sig line.
+ * @returns Doses per day, or 0 when no keyword is recognized.
+ */
+function inferDosesPerDayKeyword(text: string): number {
+  if (SIG_QID_RE.test(text)) {
+    return 4;
+  }
+  if (SIG_TID_RE.test(text)) {
+    return 3;
+  }
+  if (SIG_BID_RE.test(text)) {
+    return 2;
+  }
+  if (SIG_DAILY_RE.test(text)) {
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * Computes doses-per-day from intervals like "every 8 hours", "q6h",
+ * "every 2 days".
+ *
+ * @param text - Lowercased sig line.
+ * @returns Doses per day, or 0 when no interval phrase is recognized.
+ */
+function inferDosesPerDayFromInterval(text: string): number {
+  const everyHrs = SIG_EVERY_HOURS_RE.exec(text);
+  if (everyHrs) {
+    const h = Number.parseFloat(everyHrs[1] ?? everyHrs[2]);
+    if (Number.isFinite(h) && h > 0) {
+      return 24 / h;
+    }
+  }
+  const everyDays = SIG_EVERY_DAYS_RE.exec(text);
+  if (everyDays) {
+    const d = Number.parseFloat(everyDays[1]);
+    if (Number.isFinite(d) && d > 0) {
+      return 1 / d;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Parses a free-text sig line (e.g. "Take 1 tablet by mouth twice daily") into a
+ * per-dose × per-day estimate used to pre-fill days supply.
+ *
+ * Returns undefined when no frequency keyword is recognized so the caller can
+ * leave the previous days-supply value untouched rather than guessing.
+ *
+ * @param sigLine - The sig line text (English).
+ * @returns `{ perDose, dosesPerDay }` or `undefined` when frequency is unknown.
+ */
+function inferDailyDoseFromSig(sigLine: string): { perDose: number; dosesPerDay: number } | undefined {
+  if (!sigLine) {
+    return undefined;
+  }
+  const text = digitizeSigNumberWords(sigLine.toLowerCase());
+  const dosesPerDay = inferDosesPerDayKeyword(text) || inferDosesPerDayFromInterval(text);
+  if (!dosesPerDay) {
+    return undefined;
+  }
+  return { perDose: inferPerDoseFromSig(text), dosesPerDay };
+}
+
+/**
+ * Estimates days supply from a sig line and dispense quantity.
+ *
+ * @param sigLine - Sig text like "Take 1 tablet by mouth twice daily".
+ * @param quantity - Dispense quantity (e.g. 30 tablets).
+ * @returns Whole-day estimate, or `undefined` when the sig has no parseable frequency.
+ */
+function inferDaysSupplyFromSig(sigLine: string, quantity: number): number | undefined {
+  if (!quantity || quantity <= 0) {
+    return undefined;
+  }
+  const inferred = inferDailyDoseFromSig(sigLine);
+  if (!inferred) {
+    return undefined;
+  }
+  const perDay = inferred.perDose * inferred.dosesPerDay;
+  if (perDay <= 0) {
+    return undefined;
+  }
+  const days = Math.floor(quantity / perDay);
+  return days > 0 ? days : undefined;
+}
+
+interface ParsedSig {
+  sigLine: string;
+  quantity: number;
+  /** Resolved NCI potency-unit code (ScriptSure value when explicit, else inferred from sig + formulation text, else default tablet). */
+  quantityQualifier: string;
+  /** Raw value from ScriptSure (undefined when the API omitted it). Useful for callers that want to distinguish "explicit" from "inferred". */
+  quantityQualifierRaw: string | undefined;
+}
+
+function parseScriptSureSigs(
+  medication: Medication,
+  matcher: QualifierMatcher,
+  unitResolver: DispenseUnitNameResolver
+): ParsedSig[] {
+  const formatText = medication.code?.text;
+  const out: ParsedSig[] = [];
+  for (const ext of medication.extension ?? []) {
+    if (ext.url !== SCRIPTSURE_SIG_EXTENSION) {
+      continue;
+    }
+    const nested = ext.extension ?? [];
+    const sigLine = nested.find((n) => n.url === 'sigLine')?.valueString ?? '';
+    const quantity = nested.find((n) => n.url === 'quantity')?.valueInteger ?? 1;
+    const quantityQualifierRaw = nested.find((n) => n.url === 'quantityQualifier')?.valueString;
+    if (sigLine) {
+      out.push({
+        sigLine,
+        quantity,
+        quantityQualifier: resolveQuantityQualifier(quantityQualifierRaw, sigLine, formatText, matcher, unitResolver),
+        quantityQualifierRaw,
+      });
+    }
+  }
+  return out;
+}
+
+type BrandOrGeneric = 'brand' | 'generic' | undefined;
+
+/**
+ * Reads ScriptSure MED_NAME_TYPE_CD from a search-result Medication extension.
+ * @param m - In-memory Medication from drug name search.
+ * @returns `'brand'` for `'1'`, `'generic'` for `'2'`, otherwise undefined.
+ */
+function getBrandOrGeneric(m: Medication): BrandOrGeneric {
+  const v = getExtensionValue(m, SCRIPTSURE_NAME_TYPE_EXTENSION);
+  if (v === '1') {
+    return 'brand';
+  }
+  if (v === '2') {
+    return 'generic';
+  }
+  return undefined;
+}
+
+/**
+ * Reads the parent generic name (when the row is a brand) from a search-result Medication.
+ * @param m - In-memory Medication from drug name search.
+ * @returns Generic name string, or undefined.
+ */
+function getGenericName(m: Medication): string | undefined {
+  const v = getExtensionValue(m, SCRIPTSURE_GENERIC_NAME_EXTENSION);
+  return typeof v === 'string' ? v : undefined;
+}
+
+function medicationToOrderDrugInput(
+  m: Medication,
+  opts: {
+    sigLine3: string;
+    quantity: number;
+    refill: number;
+    useSubstitution: boolean;
+    quantityQualifier?: string;
+  }
+): MedicationOrderDrugInput {
+  const ndc = (m.code && getCodeBySystem(m.code, NDC)) ?? getIdentifier(m, NDC);
+  const rxNorm = (m.code && getCodeBySystem(m.code, RXNORM)) ?? getIdentifier(m, RXNORM);
+  const routedMedId = getRoutedMedIdFromMedication(m);
+  // A drug whose formulation lookup came back empty (OTC / topical products) has
+  // no NDC or RxNorm; it is ordered on routedMedId + GCN, with the name carried
+  // explicitly because there is no dose-level record to derive it from.
+  //
+  // The name is what makes such a line legible to the pharmacy, so a GCN-keyed
+  // line is only emitted when one is available — otherwise this falls back to
+  // routedMedId alone and the vendor requires a resolvable formulation, which
+  // fails with a clearer error than a nameless order would.
+  const drugName = getDisplayNameFromMedication(m, SCRIPTSURE_ROUTED_MED_ID_SYSTEM);
+  const gcnSeqno = ndc || rxNorm || !drugName ? undefined : getUnambiguousGcnSeqnoFromMedication(m);
+  return {
+    ...(ndc ? { ndc } : {}),
+    ...(rxNorm ? { rxNorm } : {}),
+    ...(routedMedId === undefined ? {} : { routedMedId }),
+    ...(gcnSeqno === undefined ? {} : { gcnSeqno, drugName }),
+    quantity: opts.quantity,
+    quantityQualifier: opts.quantityQualifier ?? DEFAULT_QUANTITY_QUALIFIER,
+    refill: opts.refill,
+    sigLine3: opts.sigLine3,
+    useSubstitution: opts.useSubstitution,
+  };
+}
+
+/**
+ * Compose the human-readable medication name for an order.
+ *
+ * The drug-name search result ({@link drug}) carries the actual product name
+ * (e.g. "Jentadueto" / "linagliptin-metformin"), whereas the routedMedId format
+ * lookup ({@link format}) carries only the strength/formulation (e.g.
+ * "12.5 mg-500 mg tablet"). The prescribed medication name is the combination —
+ * using the format's `code.text` alone produces a dose with no drug name (the
+ * draft title bug this fixes).
+ *
+ * @param drug - The drug picked from the name search (name source).
+ * @param format - The selected formulation/strength (coding source).
+ * @returns Combined "<name> <strength>" text, de-duplicated, or whichever is present.
+ */
+function composeMedicationName(drug: Medication | undefined, format: Medication | undefined): string | undefined {
+  const drugName = drug?.code?.text?.trim();
+  const formatText = format?.code?.text?.trim();
+  if (drugName && formatText) {
+    const dl = drugName.toLowerCase();
+    const fl = formatText.toLowerCase();
+    // Avoid duplication when one already contains the other (e.g. a name search
+    // that already includes the strength, or the no-format path where
+    // drug === format).
+    if (fl.includes(dl)) {
+      return formatText;
+    }
+    if (dl.includes(fl)) {
+      return drugName;
+    }
+    return `${drugName} ${formatText}`;
+  }
+  return drugName ?? formatText;
+}
+
+function medicationToCodeableConcept(
+  format: Medication,
+  drug?: Medication
+): MedicationRequest['medicationCodeableConcept'] {
+  const coding = [...(format.code?.coding ?? [])];
+  // The drug-format Medication carries its single GCN_SEQNO as an identifier
+  // (not a code.coding). Promote it to a coding so the draft MR carries the
+  // FDB clinical-formulation key: the ScriptSure prescription webhook reconciles
+  // draft→sent by GCN when the NDC drifts (#9300) or a generic is substituted
+  // (brand/generic share a GCN). It also makes a draft orderable when the drug
+  // has no formulations at all (`format` falls back to the name-search hit, so
+  // there is no NDC) — the order is then keyed on routedMedId + GCN. Skipped
+  // when several GCNs are present, since none of them is "the" strength.
+  const gcn = getUnambiguousGcnSeqnoFromMedication(format);
+  if (gcn !== undefined && !coding.some((c) => c.system === SCRIPTSURE_GCN_SEQNO_SYSTEM)) {
+    coding.push({ system: SCRIPTSURE_GCN_SEQNO_SYSTEM, code: String(gcn) });
+  }
+  return {
+    coding,
+    text: composeMedicationName(drug, format),
+  };
+}
+
+function medicationSearchToOption(m: Medication): AsyncAutocompleteOption<Medication> {
+  const label = m.code?.text ?? m.code?.coding?.[0]?.display ?? m.id ?? 'Medication';
+  return {
+    value: medicationDedupeKey(m),
+    label,
+    resource: m,
+  };
+}
+
+/**
+ * Best human-readable label for a {@link Condition}: prefers the per-instance
+ * `code.text`, then the first coding's `display`, then a system|code fallback,
+ * then the resource id.
+ *
+ * @param c - Condition resource.
+ * @returns Display label suitable for autocomplete options and pills.
+ */
+function conditionDisplayLabel(c: Condition): string {
+  const t = c.code?.text?.trim();
+  if (t) {
+    return t;
+  }
+  const coding = c.code?.coding?.[0];
+  if (coding?.display?.trim()) {
+    return coding.display.trim();
+  }
+  if (coding?.code) {
+    return coding.system ? `${coding.system}|${coding.code}` : coding.code;
+  }
+  return c.id ?? 'Condition';
+}
+
+function conditionToOption(c: Condition): AsyncAutocompleteOption<Condition> {
+  return {
+    value: c.id ?? conditionDisplayLabel(c),
+    label: conditionDisplayLabel(c),
+    resource: c,
+  };
+}
+
+function ConditionSearchItem(props: Readonly<AsyncAutocompleteOption<Condition>>): JSX.Element {
+  const { resource } = props;
+  const status = resource.clinicalStatus?.coding?.[0]?.code;
+  const codingCode = resource.code?.coding?.[0]?.code;
+  const codingSystem = resource.code?.coding?.[0]?.system;
+  const subtitle = [codingCode && codingSystem ? `${codingSystem.split('/').pop()} ${codingCode}` : codingCode, status]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <Stack gap={0} style={{ flex: 1 }}>
+      <Text size="sm">{props.label}</Text>
+      {subtitle && (
+        <Text size="xs" c="dimmed">
+          {subtitle}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+function MedicationSearchItem(props: Readonly<AsyncAutocompleteOption<Medication>>): JSX.Element {
+  const { resource } = props;
+  const kind = getBrandOrGeneric(resource);
+  const generic = getGenericName(resource);
+  const showGenericLine = kind === 'brand' && generic && generic.toLowerCase() !== props.label.toLowerCase();
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <Stack gap={0} style={{ flex: 1 }}>
+        <Group gap={6} wrap="nowrap">
+          <span>{props.label}</span>
+        </Group>
+        {showGenericLine && (
+          <Text size="xs" c="dimmed">
+            {generic}
+          </Text>
+        )}
+      </Stack>
+      {kind === 'brand' && (
+        <Badge color="blue" variant="light" size="sm">
+          Brand
+        </Badge>
+      )}
+      {kind === 'generic' && (
+        <Badge color="gray" variant="light" size="sm">
+          Generic
+        </Badge>
+      )}
+    </Group>
+  );
+}
+
+interface FormulationSigChoice {
+  formatIndex: number;
+  sigIndex: number;
+  formatLabel: string;
+  sigLine: string;
+  quantity: number;
+  quantityQualifier: string;
+}
+
+/**
+ * Builds a flat list of (formulation × sig) options from drug-format results.
+ * If a formulation has no sigs we emit a single placeholder entry so the user can still pick it.
+ * @param formats - Deduped Medication[] from `searchMedications({ routedMedId })`.
+ * @param matcher - Quantity-qualifier matcher used by `parseScriptSureSigs` to
+ *   resolve dispense units when ScriptSure omits them on a sig.
+ * @param unitResolver - Name→code resolver for the leading sig-unit token.
+ * @returns One row per selectable formulation+sig pair.
+ */
+function buildFormulationSigChoices(
+  formats: Medication[],
+  matcher: QualifierMatcher,
+  unitResolver: DispenseUnitNameResolver
+): FormulationSigChoice[] {
+  const out: FormulationSigChoice[] = [];
+  formats.forEach((fm, fi) => {
+    const formatLabel = fm.code?.text ?? `Option ${fi + 1}`;
+    const sigs = parseScriptSureSigs(fm, matcher, unitResolver);
+    if (sigs.length === 0) {
+      out.push({
+        formatIndex: fi,
+        sigIndex: -1,
+        formatLabel,
+        sigLine: '',
+        quantity: 0,
+        quantityQualifier: DEFAULT_QUANTITY_QUALIFIER,
+      });
+      return;
+    }
+    sigs.forEach((s, si) => {
+      out.push({
+        formatIndex: fi,
+        sigIndex: si,
+        formatLabel,
+        sigLine: s.sigLine,
+        quantity: s.quantity,
+        quantityQualifier: s.quantityQualifier,
+      });
+    });
+  });
+  return out;
+}
+
+export function OrderMedicationPage(props: Readonly<OrderMedicationPageProps>): JSX.Element {
+  const {
+    onOrderComplete,
+    onAddedToCart,
+    persistCartDraft,
+    cartAdding,
+    cartCount = 0,
+    patient: patientProp,
+    replacementMedicationRequest,
+  } = props;
+  const medplum = useMedplum();
+  const profile = useMedplumProfile();
+  const { patientId } = useParams();
+  const { searchMedications, orderMedication } = useScriptSureOrderMedication();
+  const { selectedOrganization } = useScriptSurePractice();
+  const [editableReplacement, setEditableReplacement] = useState(replacementMedicationRequest);
+  const replacementMedication = useMemo(
+    () =>
+      replacementMedicationRequest ? medicationRequestToEditableMedication(replacementMedicationRequest) : undefined,
+    [replacementMedicationRequest]
+  );
+
+  const patientReference = useMemo<Reference<Patient> | undefined>(() => {
+    if (patientProp) {
+      return undefined;
+    }
+    return (
+      narrowReference<Patient>(replacementMedicationRequest?.subject, 'Patient') ??
+      (patientId ? { reference: `Patient/${patientId}` } : undefined)
+    );
+  }, [patientProp, patientId, replacementMedicationRequest]);
+  const loadedPatient = useResource<Patient>(patientReference);
+  const [patientSelection, setPatientSelection] = useState<{ value: Patient | undefined }>();
+  const patient = patientSelection ? patientSelection.value : (patientProp ?? loadedPatient);
+  const setPatient = useCallback((value: Patient | undefined): void => {
+    setPatientSelection({ value });
+  }, []);
+
+  const profilePractitioner = profile?.resourceType === 'Practitioner' ? profile : undefined;
+  const profilePractitionerReference = profilePractitioner ? getReferenceString(profilePractitioner) : undefined;
+  const replacementRequesterReference = useMemo(
+    () => narrowReference<Practitioner>(replacementMedicationRequest?.requester, 'Practitioner'),
+    [replacementMedicationRequest]
+  );
+  const requesterReference = useMemo<Reference<Practitioner> | undefined>(() => {
+    if (replacementRequesterReference) {
+      if (!profile) {
+        return undefined;
+      }
+      return replacementRequesterReference.reference === profilePractitionerReference
+        ? undefined
+        : replacementRequesterReference;
+    }
+    return undefined;
+  }, [profile, profilePractitionerReference, replacementRequesterReference]);
+  const loadedRequester = useResource<Practitioner>(requesterReference);
+  const defaultRequester =
+    replacementRequesterReference?.reference === profilePractitionerReference
+      ? profilePractitioner
+      : (loadedRequester ?? profilePractitioner);
+  const [requesterSelection, setRequesterSelection] = useState<{ value: Practitioner | undefined }>();
+  const requester = requesterSelection ? requesterSelection.value : defaultRequester;
+  const setRequester = useCallback((value: Practitioner | undefined): void => {
+    setRequesterSelection({ value });
+  }, []);
+
+  const [activeTab, setActiveTab] = useState('single');
+
+  const [termMedication, setTermMedication] = useState<Medication | undefined>(replacementMedication);
+  const [formatMedications, setFormatMedications] = useState<Medication[]>(
+    replacementMedication ? [replacementMedication] : []
+  );
+  const [selectedFormat, setSelectedFormat] = useState<Medication | undefined>(replacementMedication);
+  const [sigIndex, setSigIndex] = useState(0);
+  const [quantity, setQuantity] = useState(replacementMedicationRequest?.dispenseRequest?.quantity?.value ?? 30);
+  const [daysSupply, setDaysSupply] = useState(
+    replacementMedicationRequest?.dispenseRequest?.expectedSupplyDuration?.value ?? 30
+  );
+  const [daysSupplyTouched, setDaysSupplyTouched] = useState(Boolean(replacementMedicationRequest));
+  const [writtenDateYmd, setWrittenDateYmd] = useState(() =>
+    dateToYmd(replacementMedicationRequest?.authoredOn, todayYmd())
+  );
+  const [fillDateYmd, setFillDateYmd] = useState(() =>
+    dateToYmd(replacementMedicationRequest?.dispenseRequest?.validityPeriod?.end)
+  );
+  const [notesPharmacist, setNotesPharmacist] = useState(replacementMedicationRequest?.note?.[0]?.text ?? '');
+  const [patientInstruction, setPatientInstruction] = useState(
+    replacementMedicationRequest?.dosageInstruction?.[0]?.patientInstruction ?? ''
+  );
+  const [manualQtyQualifier, setManualQtyQualifier] = useState(
+    replacementMedicationRequest?.dispenseRequest?.quantity?.unit ??
+      replacementMedicationRequest?.dispenseRequest?.quantity?.code ??
+      DEFAULT_QUANTITY_QUALIFIER
+  );
+  const [qualifierCatalog, setQualifierCatalog] = useState<{ code: string; label: string }[]>([]);
+  const [refill, setRefill] = useState(replacementMedicationRequest?.dispenseRequest?.numberOfRepeatsAllowed ?? 0);
+  const [useSubstitution, setUseSubstitution] = useState(
+    replacementMedicationRequest?.substitution?.allowedBoolean ?? true
+  );
+  const [freeSig, setFreeSig] = useState(replacementMedicationRequest?.dosageInstruction?.[0]?.text ?? '');
+  const [loadingFormats, setLoadingFormats] = useState(false);
+
+  const [compoundDaysSupply, setCompoundDaysSupply] = useState(30);
+  const [compoundWrittenYmd, setCompoundWrittenYmd] = useState(todayYmd);
+  const [compoundFillYmd, setCompoundFillYmd] = useState('');
+  const [compoundNotesPharmacist, setCompoundNotesPharmacist] = useState('');
+  const [compoundPatientInstruction, setCompoundPatientInstruction] = useState('');
+
+  const primaryConditionReference = useMemo(
+    () => narrowReference<Condition>(replacementMedicationRequest?.reasonReference?.[0], 'Condition'),
+    [replacementMedicationRequest]
+  );
+  const coverageReference = useMemo(
+    () => narrowReference<Coverage>(replacementMedicationRequest?.insurance?.[0], 'Coverage'),
+    [replacementMedicationRequest]
+  );
+  const pharmacyReference = useMemo(
+    () => narrowReference<Organization>(replacementMedicationRequest?.dispenseRequest?.performer, 'Organization'),
+    [replacementMedicationRequest]
+  );
+  const loadedPrimaryCondition = useResource<Condition>(primaryConditionReference);
+  const loadedCoverage = useResource<Coverage>(coverageReference);
+  const loadedPharmacy = useResource<Organization>(pharmacyReference);
+  const [primaryConditionSelection, setPrimaryConditionSelection] = useState<{
+    value: Condition | undefined;
+  }>();
+  const [coverageSelection, setCoverageSelection] = useState<{ value: Coverage | undefined }>();
+  const [pharmacySelection, setPharmacySelection] = useState<{ value: Organization | undefined }>();
+  const primaryCondition = primaryConditionSelection ? primaryConditionSelection.value : loadedPrimaryCondition;
+  const coverage = coverageSelection ? coverageSelection.value : loadedCoverage;
+  const pharmacyOrg = pharmacySelection ? pharmacySelection.value : loadedPharmacy;
+  const setPrimaryCondition = useCallback((value: Condition | undefined): void => {
+    setPrimaryConditionSelection({ value });
+  }, []);
+  const setCoverage = useCallback((value: Coverage | undefined): void => {
+    setCoverageSelection({ value });
+  }, []);
+  const setPharmacyOrg = useCallback((value: Organization | undefined): void => {
+    setPharmacySelection({ value });
+  }, []);
+
+  const [compoundLines, setCompoundLines] = useState<
+    {
+      id: string;
+      termMed?: Medication;
+      formatMed?: Medication;
+      quantity: number;
+      refill: number;
+      useSubstitution: boolean;
+    }[]
+  >([
+    { id: 'a', quantity: 30, refill: 0, useSubstitution: true },
+    { id: 'b', quantity: 30, refill: 0, useSubstitution: true },
+  ]);
+
+  const updateCompoundLine = useCallback((id: string, next: CompoundLineState) => {
+    setCompoundLines((prev) => prev.map((l) => (l.id === id ? next : l)));
+  }, []);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitOutcome, setSubmitOutcome] = useState<OperationOutcome>();
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  // Pull the live `[{ potencyUnit, name }]` catalog from
+  // `GET /v3/prescription/quantityqualifier` (via scriptsure-drug-search-bot),
+  // merge it with the static fallback so the dropdown is populated even on
+  // first paint / bot failure, and surface the merged catalog so the keyword
+  // matcher (below) is driven by the live names.
+  useEffect(() => {
+    let cancelled = false;
+    loadScriptSureQuantityQualifiers(medplum)
+      .then((live) => {
+        if (cancelled) {
+          return;
+        }
+        const merged = mergeQuantityQualifierCatalog(live.map((row) => ({ potencyUnit: row.code, name: row.label })));
+        setQualifierCatalog(merged);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQualifierCatalog(mergeQuantityQualifierCatalog([]));
+        }
+      });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [medplum]);
+
+  const qtyQualifierSelectData = useMemo(
+    () => qualifierCatalog.map((r) => ({ value: r.code, label: `${r.label} (${r.code})` })),
+    [qualifierCatalog]
+  );
+
+  // Keyword matcher built from the live catalog; falls back to STATIC_QUALIFIER_MATCHER
+  // until the bot call resolves so prescribers never see "Tablet" frozen on a
+  // suppository while the catalog is loading.
+  const qualifierMatcher = useMemo<QualifierMatcher>(() => {
+    if (qualifierCatalog.length === 0) {
+      return STATIC_QUALIFIER_MATCHER;
+    }
+    return buildQualifierMatcher(qualifierCatalog.map((r) => ({ potencyUnit: r.code, name: r.label })));
+  }, [qualifierCatalog]);
+
+  // Name→code resolver for the leading sig-unit token ("30 Gram" → C48155),
+  // built from the same live catalog; falls back to the static resolver until
+  // the bot call resolves.
+  const unitNameResolver = useMemo<DispenseUnitNameResolver>(() => {
+    if (qualifierCatalog.length === 0) {
+      return STATIC_DISPENSE_UNIT_NAME_RESOLVER;
+    }
+    return buildDispenseUnitNameResolver(qualifierCatalog.map((r) => ({ potencyUnit: r.code, name: r.label })));
+  }, [qualifierCatalog]);
+
+  useEffect(() => {
+    if (!termMedication) {
+      setFormatMedications([]);
+      setSelectedFormat(undefined);
+      return undefined;
+    }
+    if (replacementMedicationRequest && termMedication === replacementMedication) {
+      setFormatMedications([termMedication]);
+      setSelectedFormat(termMedication);
+      return undefined;
+    }
+    const rid = getRoutedMedIdFromMedication(termMedication);
+    if (rid === undefined) {
+      setFormatMedications([]);
+      setSelectedFormat(termMedication);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoadingFormats(true);
+    // The GCNs come along so a drug with no dose formats still yields selectable
+    // strengths (each GCN resolves to a named product) instead of dropping the
+    // prescriber onto the strength-less name-search hit.
+    searchMedications({ routedMedId: rid, gcnSeqnos: getGcnSeqnosFromMedication(termMedication) })
+      .then((list) => {
+        if (!cancelled) {
+          const deduped = dedupeMedications(list);
+          setFormatMedications(deduped);
+          const pick = deduped[0] ?? termMedication;
+          setSelectedFormat(pick);
+          setSigIndex(0);
+        }
+      })
+      .catch(showErrorNotification)
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingFormats(false);
+        }
+      });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [termMedication, searchMedications, replacementMedicationRequest, replacementMedication]);
+
+  const sigOptions = useMemo(
+    () => (selectedFormat ? parseScriptSureSigs(selectedFormat, qualifierMatcher, unitNameResolver) : []),
+    [selectedFormat, qualifierMatcher, unitNameResolver]
+  );
+
+  const formulationSigChoices = useMemo(
+    () => buildFormulationSigChoices(formatMedications, qualifierMatcher, unitNameResolver),
+    [formatMedications, qualifierMatcher, unitNameResolver]
+  );
+
+  const selectedChoiceKey = useMemo(() => {
+    if (!selectedFormat || formatMedications.length === 0) {
+      return '';
+    }
+    const fIdx = formatMedications.indexOf(selectedFormat);
+    if (fIdx < 0) {
+      return '';
+    }
+    const si = sigOptions.length > 0 ? sigIndex : -1;
+    return `${fIdx}:${si}`;
+  }, [selectedFormat, formatMedications, sigOptions, sigIndex]);
+
+  // Auto-sync the visible quantity and quantity qualifier to the currently selected sig.
+  useEffect(() => {
+    const s = sigOptions[sigIndex];
+    if (s && s.quantity > 0) {
+      setQuantity(s.quantity);
+    }
+    if (s) {
+      setManualQtyQualifier(s.quantityQualifier);
+    }
+  }, [sigOptions, sigIndex]);
+
+  // Reset the "user touched it" lock whenever any input the precalc depends
+  // on changes (medication, sig, OR quantity). Without resetting on quantity
+  // changes, a single edit to days-supply disables auto-precalc for the rest
+  // of the page lifetime — including when the prescriber later changes the
+  // dispense quantity and naturally expects days-supply to follow.
+  useEffect(() => {
+    setDaysSupplyTouched(Boolean(replacementMedicationRequest));
+  }, [selectedFormat, sigIndex, quantity, replacementMedicationRequest]);
+
+  // Pre-fill days supply from the currently visible sig + dispense quantity.
+  // We stop overriding once the user edits the days-supply field manually so the
+  // auto-calc behaves as a hint, not a lock — but only within the current
+  // medication/sig context (see reset effect above).
+  const activeSigText = sigOptions[sigIndex]?.sigLine ?? freeSig;
+  useEffect(() => {
+    if (daysSupplyTouched) {
+      return;
+    }
+    const days = inferDaysSupplyFromSig(activeSigText, quantity);
+    if (days && days !== daysSupply) {
+      setDaysSupply(days);
+    }
+  }, [activeSigText, quantity, daysSupplyTouched, daysSupply]);
+
+  const loadMedicationOptions = useCallback(
+    async (input: string, signal: AbortSignal): Promise<Medication[]> => {
+      const t = input.trim();
+      if (t.length < 2) {
+        return [];
+      }
+      const list = await searchMedications({ term: t });
+      if (signal.aborted) {
+        return [];
+      }
+      return dedupeMedications(list);
+    },
+    [searchMedications]
+  );
+
+  const selectedSigText = useMemo(() => {
+    if (sigOptions.length > 0 && sigOptions[sigIndex]) {
+      return sigOptions[sigIndex].sigLine;
+    }
+    return freeSig;
+  }, [sigOptions, sigIndex, freeSig]);
+
+  /**
+   * Builds the draft `MedicationRequest` body from the current single-tab state.
+   * Shared by "Prescribe now" ({@link submitSingle}) and "Add to cart"
+   * ({@link addToCart}) so both paths persist an identical draft; the only
+   * difference is whether `$order-medication` runs afterward. Returns `undefined`
+   * (after surfacing a validation error) when required fields are missing.
+   *
+   * @returns The draft MR body to `createResource`, or `undefined` when invalid.
+   */
+  const buildSingleDraftBody = (): MedicationRequest | undefined => {
+    if (!patient?.id || !requester || !selectedFormat) {
+      showErrorNotification('Patient, requester, and medication are required');
+      return undefined;
+    }
+    const sigLine3 = selectedSigText.trim() || 'Take as directed';
+    const q = sigOptions.length > 0 && sigOptions[sigIndex] ? sigOptions[sigIndex].quantity : quantity;
+    const qtyUnit =
+      sigOptions.length > 0 && sigOptions[sigIndex] ? sigOptions[sigIndex].quantityQualifier : manualQtyQualifier;
+
+    return {
+      resourceType: 'MedicationRequest',
+      status: 'draft',
+      intent: 'order',
+      subject: createReference(patient),
+      requester: createReference(requester),
+      authoredOn: writtenDateYmd,
+      medicationCodeableConcept: medicationToCodeableConcept(selectedFormat, termMedication),
+      substitution: { allowedBoolean: useSubstitution },
+      reasonReference: primaryCondition?.id ? [{ reference: `Condition/${primaryCondition.id}` }] : undefined,
+      insurance: coverage?.id ? [{ reference: `Coverage/${coverage.id}` }] : undefined,
+      dosageInstruction: [
+        {
+          text: sigLine3,
+          patientInstruction: patientInstruction.trim() || undefined,
+        },
+      ],
+      note: notesPharmacist.trim() ? [{ text: notesPharmacist.trim() }] : undefined,
+      dispenseRequest: {
+        quantity: { value: q, unit: qtyUnit },
+        numberOfRepeatsAllowed: refill,
+        expectedSupplyDuration: {
+          value: daysSupply,
+          unit: 'days',
+          system: 'http://unitsofmeasure.org',
+          code: 'd',
+        },
+        validityPeriod: {
+          start: writtenDateYmd,
+          ...(fillDateYmd.trim() ? { end: fillDateYmd.trim() } : {}),
+        },
+        performer: pharmacyOrg?.id ? createReference(pharmacyOrg) : undefined,
+      },
+    };
+  };
+
+  /** Clears the medication selection so the prescriber can add the next cart line. */
+  const resetSingleMedicationSelection = (): void => {
+    setTermMedication(undefined);
+    setFormatMedications([]);
+    setSelectedFormat(undefined);
+    setSigIndex(0);
+    setFreeSig('');
+  };
+
+  const addToCart = async (): Promise<void> => {
+    if (!patient?.id) {
+      return;
+    }
+    const body = buildSingleDraftBody();
+    if (!body) {
+      return;
+    }
+    const persist = persistCartDraft ?? ((mr: MedicationRequest) => medplum.createResource<MedicationRequest>(mr));
+    const useLocalLoading = !persistCartDraft;
+    if (useLocalLoading) {
+      setAddingToCart(true);
+    }
+    try {
+      const created = await persist(body);
+      onAddedToCart?.(created as WithId<MedicationRequest>);
+      resetSingleMedicationSelection();
+    } catch (e) {
+      showErrorNotification(e);
+    } finally {
+      if (useLocalLoading) {
+        setAddingToCart(false);
+      }
+    }
+  };
+
+  const isAddingToCart = persistCartDraft ? (cartAdding ?? false) : addingToCart;
+
+  const submitSingle = async (): Promise<void> => {
+    const body = buildSingleDraftBody();
+    if (!body || !patient?.id) {
+      return;
+    }
+    const patientId = patient.id;
+
+    setSubmitting(true);
+    setSubmitOutcome(undefined);
+    let createdMr: WithId<MedicationRequest> | undefined;
+    try {
+      createdMr = editableReplacement
+        ? await medplum.updateResource<MedicationRequest>({
+            ...editableReplacement,
+            ...body,
+            priorPrescription: editableReplacement.priorPrescription,
+            statusReason: undefined,
+          })
+        : await medplum.createResource<MedicationRequest>(body);
+      if (editableReplacement) {
+        setEditableReplacement(createdMr);
+      }
+
+      const res = await orderMedication({
+        patientId,
+        medicationRequestId: createdMr.id,
+        conditionIds: primaryCondition?.id ? [primaryCondition.id] : [],
+        coverageId: coverage?.id,
+        pharmacyOrganizationId: pharmacyOrg?.id,
+        writtenDate: writtenDateYmd,
+        fillDate: fillDateYmd.trim() || undefined,
+        organization: selectedOrganization,
+      });
+
+      onOrderComplete?.({ launchUrl: res.launchUrl, medicationRequestId: res.medicationRequestId });
+    } catch (e) {
+      const outcome = normalizeOperationOutcome(e);
+      setSubmitOutcome(outcome);
+      // The order-medication operation (or its downstream FHIR write) failed after
+      // the draft MR was created. We *soft*-delete instead of hard-deleting because
+      // the vendor side may have actually accepted (and even transmitted) the
+      // prescription before the response was lost — hard-deleting would leave us
+      // with a real-world Rx and no local record to reconcile against the vendor
+      // webhook. Mark the MR as `unknown` + statusReason so MedicationsPage filters
+      // can hide it from the active list while inbound reconciliation still has a
+      // resource to address. PUT is idempotent on retry. Failures here are
+      // swallowed so the original error is the one the user sees.
+      // A structured OperationOutcome is an explicit server rejection, so the
+      // draft is safe to keep editable for correction and retry. Only ambiguous
+      // transport/response failures move it to `unknown`.
+      if (createdMr?.id && !(e instanceof OperationOutcomeError)) {
+        try {
+          const uncertain = await medplum.updateResource<MedicationRequest>({
+            ...createdMr,
+            status: 'unknown',
+            statusReason: buildMedicationRequestResponseLostStatusReason(),
+          });
+          if (editableReplacement) {
+            setEditableReplacement(uncertain);
+          }
+        } catch {
+          // ignore - we still want to surface the original error
+        }
+      }
+      showErrorNotification(outcome);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitCompound = async (): Promise<void> => {
+    if (!patient?.id) {
+      showErrorNotification('Patient is required');
+      return;
+    }
+    if (!requester) {
+      showErrorNotification('Requester is required');
+      return;
+    }
+    const drugs: MedicationOrderDrugInput[] = [];
+    for (const line of compoundLines) {
+      if (!line.formatMed) {
+        showErrorNotification('Each compound line needs a selected formulation');
+        return;
+      }
+      const sigs = parseScriptSureSigs(line.formatMed, qualifierMatcher, unitNameResolver);
+      const sigLine3 = sigs[0]?.sigLine ?? 'Take as directed';
+      drugs.push(
+        medicationToOrderDrugInput(line.formatMed, {
+          sigLine3,
+          quantity: line.quantity,
+          refill: line.refill,
+          useSubstitution: line.useSubstitution,
+          quantityQualifier: sigs[0]?.quantityQualifier,
+        })
+      );
+    }
+    if (drugs.length < 2) {
+      showErrorNotification('Compound orders need at least two drug lines');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const sigExtras = compoundPatientInstruction.trim();
+      const drugsWithNotes = sigExtras
+        ? drugs.map((d, i) =>
+            i === 0
+              ? {
+                  ...d,
+                  sigLine3: [d.sigLine3, sigExtras].filter(Boolean).join(' · '),
+                }
+              : d
+          )
+        : drugs;
+      const res = await orderMedication({
+        patientId: patient.id,
+        combinationMed: true,
+        drugs: drugsWithNotes,
+        conditionIds: primaryCondition?.id ? [primaryCondition.id] : [],
+        coverageId: coverage?.id,
+        pharmacyOrganizationId: pharmacyOrg?.id,
+        writtenDate: compoundWrittenYmd,
+        fillDate: compoundFillYmd.trim() || undefined,
+        durationDays: compoundDaysSupply,
+        pharmacyNote: compoundNotesPharmacist.trim() || undefined,
+        organization: selectedOrganization,
+      });
+      onOrderComplete?.({ launchUrl: res.launchUrl, medicationRequestId: res.medicationRequestId });
+    } catch (e) {
+      showErrorNotification(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Container size="md">
+      <Panel>
+        <Group justify="flex-end" mb="sm">
+          <ScriptSurePracticeSwitcher />
+        </Group>
+        {replacementMedicationRequest && (
+          <Text size="sm" c="dimmed" mb="sm">
+            Review and edit the replacement prescription before sending it to ScriptSure.
+          </Text>
+        )}
+        <Tabs value={activeTab} onChange={(v) => setActiveTab(v ?? 'single')}>
+          <Tabs.List>
+            <Tabs.Tab value="single">{replacementMedicationRequest ? 'Medication' : 'Single medication'}</Tabs.Tab>
+            {!replacementMedicationRequest && (
+              <>
+                <Tabs.Tab value="compound">Compound</Tabs.Tab>
+                <Tabs.Tab value="order-set">Order set</Tabs.Tab>
+              </>
+            )}
+          </Tabs.List>
+
+          <Tabs.Panel value="single" pt="md">
+            <Stack gap="md">
+              <Input.Wrapper label="Patient" required>
+                <ResourceInput<Patient>
+                  key={patient?.id ?? 'patient-input'}
+                  resourceType="Patient"
+                  name="patient"
+                  defaultValue={patient}
+                  onChange={setPatient}
+                />
+              </Input.Wrapper>
+
+              <Input.Wrapper label="Requester" required>
+                <ResourceInput<Practitioner>
+                  key={requester?.id ?? 'requester-input'}
+                  resourceType="Practitioner"
+                  name="requester"
+                  defaultValue={requester}
+                  onChange={setRequester}
+                />
+              </Input.Wrapper>
+
+              <div>
+                <AsyncAutocomplete<Medication>
+                  key={replacementMedicationRequest?.id ?? 'new-medication'}
+                  required
+                  maxValues={1}
+                  minInputLength={2}
+                  label="Search medication"
+                  placeholder="Type drug name"
+                  loadOptions={loadMedicationOptions}
+                  toOption={medicationSearchToOption}
+                  itemComponent={MedicationSearchItem}
+                  defaultValue={replacementMedication}
+                  onChange={(items) => {
+                    setTermMedication(items[0]);
+                    setFreeSig('');
+                  }}
+                />
+                {loadingFormats && <Text size="sm">Loading formulations…</Text>}
+              </div>
+
+              {formulationSigChoices.length > 0 && (
+                <Radio.Group
+                  label={`Formulation & directions (${formulationSigChoices.length})`}
+                  description="Pick the formulation and pre-built sig in one step"
+                  value={selectedChoiceKey}
+                  onChange={(v) => {
+                    const [fStr, sStr] = v.split(':');
+                    const fIdx = Number.parseInt(fStr, 10);
+                    const sIdx = Number.parseInt(sStr, 10);
+                    const fm = formatMedications[fIdx];
+                    if (fm) {
+                      setSelectedFormat(fm);
+                      setSigIndex(Math.max(sIdx, 0));
+                    }
+                  }}
+                >
+                  <ScrollArea.Autosize mah={320} mt="xs" type="auto" offsetScrollbars>
+                    <Stack gap="xs" pr="sm">
+                      {formulationSigChoices.map((choice) => (
+                        <Radio
+                          key={`${choice.formatIndex}:${choice.sigIndex}`}
+                          value={`${choice.formatIndex}:${choice.sigIndex}`}
+                          label={
+                            <Stack gap={0}>
+                              <Text size="sm" fw={500}>
+                                {choice.formatLabel}
+                              </Text>
+                              {choice.sigLine && (
+                                <Text size="xs" c="dimmed">
+                                  {choice.sigLine}
+                                  {choice.quantity > 0 ? ` · qty ${choice.quantity}` : ''}
+                                </Text>
+                              )}
+                            </Stack>
+                          }
+                        />
+                      ))}
+                    </Stack>
+                  </ScrollArea.Autosize>
+                </Radio.Group>
+              )}
+
+              {selectedFormat && sigOptions.length === 0 && (
+                <TextInput
+                  label="Sig (directions)"
+                  required
+                  value={freeSig}
+                  onChange={(e) => setFreeSig(e.currentTarget.value)}
+                />
+              )}
+
+              <Group grow>
+                <TextInput
+                  type="date"
+                  label="Written / start date"
+                  value={writtenDateYmd}
+                  onChange={(e) => setWrittenDateYmd(e.currentTarget.value)}
+                />
+                <TextInput
+                  type="date"
+                  label="Earliest fill (optional)"
+                  value={fillDateYmd}
+                  onChange={(e) => setFillDateYmd(e.currentTarget.value)}
+                />
+              </Group>
+
+              <Group grow align="flex-start">
+                <NumberInput
+                  label="Days supply"
+                  description="Auto-estimated from sig × quantity"
+                  value={daysSupply}
+                  onChange={(v) => {
+                    setDaysSupplyTouched(true);
+                    setDaysSupply(Number(v) || 0);
+                  }}
+                  min={1}
+                />
+                <NumberInput
+                  label="Quantity to dispense"
+                  description="Amount to send (e.g. tablets)"
+                  value={quantity}
+                  onChange={(v) => setQuantity(Number(v) || 0)}
+                  min={0}
+                />
+                <NumberInput
+                  label="Refills"
+                  description="Number of refills allowed"
+                  value={refill}
+                  onChange={(v) => setRefill(Number(v) || 0)}
+                  min={0}
+                />
+              </Group>
+
+              <Select
+                label="Quantity qualifier (dispense unit)"
+                description="How the dispensed amount is counted (NCI potency unit)"
+                data={qtyQualifierSelectData}
+                value={manualQtyQualifier}
+                onChange={(v) => setManualQtyQualifier(v ?? DEFAULT_QUANTITY_QUALIFIER)}
+                searchable
+              />
+
+              <Textarea
+                label="Notes to pharmacist"
+                placeholder="Shown on the ScriptSure pending order"
+                value={notesPharmacist}
+                onChange={(e) => setNotesPharmacist(e.currentTarget.value)}
+                minRows={2}
+              />
+              <Textarea
+                label="Patient instructions (additional)"
+                placeholder="Optional extra directions for the patient label"
+                value={patientInstruction}
+                onChange={(e) => setPatientInstruction(e.currentTarget.value)}
+                minRows={2}
+              />
+
+              <Checkbox
+                label="Allow substitution"
+                checked={useSubstitution}
+                onChange={(e) => setUseSubstitution(e.currentTarget.checked)}
+              />
+
+              <OptionalContextFields
+                medplum={medplum}
+                patient={patient}
+                primaryCondition={primaryCondition}
+                setPrimaryCondition={setPrimaryCondition}
+                coverage={coverage}
+                setCoverage={setCoverage}
+                pharmacyOrg={pharmacyOrg}
+                setPharmacyOrg={setPharmacyOrg}
+              />
+
+              {onAddedToCart && !replacementMedicationRequest && cartCount > 0 && (
+                <Group gap={6} justify="center">
+                  <IconShoppingCart size={16} />
+                  <Text size="sm" c="dimmed">
+                    {cartCount} in cart — review and check out on the Draft tab
+                  </Text>
+                </Group>
+              )}
+              {onAddedToCart && !replacementMedicationRequest ? (
+                <Group grow>
+                  <Button
+                    onClick={() => {
+                      addToCart().catch(showErrorNotification);
+                    }}
+                    loading={isAddingToCart}
+                    disabled={submitting}
+                    leftSection={<IconShoppingCart size={16} />}
+                  >
+                    Add to cart
+                  </Button>
+                  <Button variant="default" onClick={submitSingle} loading={submitting} disabled={isAddingToCart}>
+                    Prescribe this medication
+                  </Button>
+                </Group>
+              ) : (
+                <>
+                  {submitOutcome && <OperationOutcomeAlert outcome={submitOutcome} />}
+                  <Button onClick={submitSingle} loading={submitting} fullWidth>
+                    {replacementMedicationRequest ? 'Re-prescribe' : 'Prescribe now'}
+                  </Button>
+                </>
+              )}
+            </Stack>
+          </Tabs.Panel>
+
+          {!replacementMedicationRequest && (
+            <Tabs.Panel value="compound" pt="md">
+              <Stack gap="md">
+                <Input.Wrapper label="Patient" required>
+                  <ResourceInput<Patient>
+                    key={patient?.id ?? 'patient-compound'}
+                    resourceType="Patient"
+                    name="patient-compound"
+                    defaultValue={patient}
+                    onChange={setPatient}
+                  />
+                </Input.Wrapper>
+
+                <ResourceInput<Practitioner>
+                  resourceType="Practitioner"
+                  name="requester-c"
+                  label="Requester"
+                  defaultValue={requester}
+                  onChange={setRequester}
+                />
+
+                <Group grow>
+                  <TextInput
+                    type="date"
+                    label="Written / start date"
+                    value={compoundWrittenYmd}
+                    onChange={(e) => setCompoundWrittenYmd(e.currentTarget.value)}
+                  />
+                  <TextInput
+                    type="date"
+                    label="Earliest fill (optional)"
+                    value={compoundFillYmd}
+                    onChange={(e) => setCompoundFillYmd(e.currentTarget.value)}
+                  />
+                </Group>
+                <NumberInput
+                  label="Days supply"
+                  description="Therapy length (days) for the compound order"
+                  value={compoundDaysSupply}
+                  onChange={(v) => setCompoundDaysSupply(Number(v) || 0)}
+                  min={1}
+                />
+                <Textarea
+                  label="Notes to pharmacist"
+                  value={compoundNotesPharmacist}
+                  onChange={(e) => setCompoundNotesPharmacist(e.currentTarget.value)}
+                  minRows={2}
+                />
+                <Textarea
+                  label="Patient instructions (additional)"
+                  description="Appended to the first drug line sig sent to ScriptSure"
+                  value={compoundPatientInstruction}
+                  onChange={(e) => setCompoundPatientInstruction(e.currentTarget.value)}
+                  minRows={2}
+                />
+
+                {compoundLines.map((line, idx) => (
+                  <CompoundLineEditor
+                    key={line.id}
+                    index={idx}
+                    line={line}
+                    searchMedications={searchMedications}
+                    onChange={(next) => updateCompoundLine(line.id, next)}
+                  />
+                ))}
+                <Button
+                  variant="light"
+                  onClick={() =>
+                    setCompoundLines((prev) => [
+                      ...prev,
+                      {
+                        id: `line-${Date.now()}-${prev.length}`,
+                        quantity: 30,
+                        refill: 0,
+                        useSubstitution: true,
+                      },
+                    ])
+                  }
+                >
+                  Add drug line
+                </Button>
+                <OptionalContextFields
+                  medplum={medplum}
+                  patient={patient}
+                  primaryCondition={primaryCondition}
+                  setPrimaryCondition={setPrimaryCondition}
+                  coverage={coverage}
+                  setCoverage={setCoverage}
+                  pharmacyOrg={pharmacyOrg}
+                  setPharmacyOrg={setPharmacyOrg}
+                />
+                <Button onClick={submitCompound} loading={submitting}>
+                  Prescribe
+                </Button>
+              </Stack>
+            </Tabs.Panel>
+          )}
+
+          {!replacementMedicationRequest && (
+            <Tabs.Panel value="order-set" pt="md">
+              <OrderSetTabPanel
+                patient={patient}
+                requester={requester}
+                onPatientChange={setPatient}
+                onRequesterChange={setRequester}
+                onOrderComplete={onOrderComplete}
+              />
+            </Tabs.Panel>
+          )}
+        </Tabs>
+      </Panel>
+    </Container>
+  );
+}
+
+function coverageLabel(coverage: Coverage): string {
+  const payor = coverage.payor?.find((p) => p.display)?.display;
+  const plan = coverage.class?.find((c) => c.name)?.name;
+  const memberId = coverage.subscriberId;
+  const parts = [payor ?? 'Coverage', plan, memberId ? `#${memberId}` : undefined].filter(Boolean);
+  return parts.join(' · ');
+}
+
+export interface OptionalContextFieldsProps {
+  medplum: MedplumClient;
+  patient: Patient | undefined;
+  primaryCondition: Condition | undefined;
+  setPrimaryCondition: (c: Condition | undefined) => void;
+  coverage: Coverage | undefined;
+  setCoverage: (c: Coverage | undefined) => void;
+  pharmacyOrg: Organization | undefined;
+  setPharmacyOrg: (o: Organization | undefined) => void;
+}
+
+export function OptionalContextFields(props: Readonly<OptionalContextFieldsProps>): JSX.Element {
+  const {
+    medplum,
+    patient,
+    primaryCondition,
+    setPrimaryCondition,
+    coverage,
+    setCoverage,
+    pharmacyOrg,
+    setPharmacyOrg,
+  } = props;
+
+  const patientId = patient?.id;
+
+  const [coverageSearchResult, , coveragesOutcome] = useSearchResources(
+    'Coverage',
+    patientId ? { patient: `Patient/${patientId}`, status: 'active', _count: '50' } : undefined,
+    { enabled: Boolean(patientId) }
+  );
+
+  const patientCoverages = useMemo(
+    () => (patientId ? (coverageSearchResult ?? []) : []),
+    [patientId, coverageSearchResult]
+  );
+
+  const preferredPharmacyRefs = useMemo(() => (patient ? getPreferredPharmaciesFromPatient(patient) : []), [patient]);
+
+  const preferredPharmacyOrgIds = useMemo(
+    () =>
+      preferredPharmacyRefs
+        .map((pref) => resolveId(pref.organizationRef))
+        .filter(isDefined)
+        .join(','),
+    [preferredPharmacyRefs]
+  );
+
+  const [organizations, , organizationsOutcome] = useSearchResources(
+    'Organization',
+    { _id: preferredPharmacyOrgIds, _count: String(Math.max(preferredPharmacyRefs.length, 1)) },
+    { enabled: preferredPharmacyOrgIds.length > 0 }
+  );
+
+  const preferredPharmacies = useMemo(() => {
+    if (!patient || preferredPharmacyOrgIds.length === 0) {
+      return [];
+    }
+    const orgById = new Map(
+      (organizations ?? []).filter((org): org is WithId<Organization> => Boolean(org.id)).map((org) => [org.id, org])
+    );
+    const rows = preferredPharmacyRefs
+      .map((pref) => {
+        const id = resolveId(pref.organizationRef);
+        const org = id ? orgById.get(id) : undefined;
+        return org ? { org, isPrimary: pref.isPrimary } : undefined;
+      })
+      .filter(isDefined);
+    // Surface the primary pharmacy first.
+    rows.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+    return rows;
+  }, [patient, preferredPharmacyOrgIds, organizations, preferredPharmacyRefs]);
+
+  useEffect(() => {
+    if (coveragesOutcome && !isOk(coveragesOutcome)) {
+      showErrorNotification(coveragesOutcome);
+    }
+  }, [coveragesOutcome]);
+
+  useEffect(() => {
+    if (organizationsOutcome && !isOk(organizationsOutcome)) {
+      showErrorNotification(organizationsOutcome);
+    }
+  }, [organizationsOutcome]);
+
+  // Auto-select primary pharmacy when nothing is chosen yet.
+  useEffect(() => {
+    if (pharmacyOrg) {
+      return;
+    }
+    const primary = preferredPharmacies.find((p) => p.isPrimary) ?? preferredPharmacies[0];
+    if (primary) {
+      setPharmacyOrg(primary.org);
+    }
+  }, [preferredPharmacies, pharmacyOrg, setPharmacyOrg]);
+
+  // Auto-select the first active coverage when nothing is chosen yet.
+  useEffect(() => {
+    if (coverage) {
+      return;
+    }
+    const first = patientCoverages[0];
+    if (first) {
+      setCoverage(first);
+    }
+  }, [patientCoverages, coverage, setCoverage]);
+
+  const coverageOptions = useMemo(
+    () => patientCoverages.filter((c) => c.id).map((c) => ({ value: getReferenceString(c), label: coverageLabel(c) })),
+    [patientCoverages]
+  );
+
+  const pharmacyOptions = useMemo(
+    () =>
+      preferredPharmacies.map(({ org, isPrimary }) => ({
+        value: getReferenceString(org),
+        label: `${org.name ?? 'Pharmacy'}${isPrimary ? ' (primary)' : ''}`,
+      })),
+    [preferredPharmacies]
+  );
+
+  const loadConditionOptions = useCallback(
+    async (input: string, signal: AbortSignal): Promise<Condition[]> => {
+      if (!patientId) {
+        return [];
+      }
+      const term = input.trim();
+      const params = new URLSearchParams({
+        patient: `Patient/${patientId}`,
+        _count: '20',
+        _sort: '-recorded-date',
+      });
+      // ScriptSure-style use case: most users search by display text. `code:text`
+      // does a contains-style match against `code.text` and `code.coding[].display`,
+      // which is what the user actually sees in the picker.
+      if (term.length > 0) {
+        params.set('code:text', term);
+      }
+      try {
+        const rows = await medplum.searchResources('Condition', params, { signal });
+        return rows;
+      } catch (err) {
+        if (signal.aborted) {
+          return [];
+        }
+        showErrorNotification(err);
+        return [];
+      }
+    },
+    [medplum, patientId]
+  );
+
+  return (
+    <>
+      <Divider label="Optional context" labelPosition="center" />
+      <AsyncAutocomplete<Condition>
+        label="Condition (diagnosis)"
+        placeholder={patient ? 'Search this patient\u2019s conditions' : 'Select patient first'}
+        disabled={!patient}
+        maxValues={1}
+        minInputLength={2}
+        defaultValue={primaryCondition}
+        loadOptions={loadConditionOptions}
+        toOption={conditionToOption}
+        itemComponent={ConditionSearchItem}
+        onChange={(items) => setPrimaryCondition(items[0])}
+        clearable
+      />
+      <Select
+        label="Coverage"
+        description={
+          patientCoverages.length === 0
+            ? 'No active coverages on file for this patient'
+            : "Select from the patient's active plans"
+        }
+        placeholder={patientCoverages.length === 0 ? 'No coverages found' : 'Select coverage'}
+        data={coverageOptions}
+        disabled={patientCoverages.length === 0}
+        value={coverage ? getReferenceString(coverage) : null}
+        onChange={(v) => {
+          const next = patientCoverages.find((c) => getReferenceString(c) === v);
+          setCoverage(next);
+        }}
+        clearable
+      />
+      <Select
+        label="Pharmacy"
+        description={
+          preferredPharmacies.length === 0
+            ? 'No preferred pharmacies on file for this patient'
+            : "Select from the patient's preferred pharmacies"
+        }
+        placeholder={preferredPharmacies.length === 0 ? 'No preferred pharmacies' : 'Select pharmacy'}
+        data={pharmacyOptions}
+        disabled={preferredPharmacies.length === 0}
+        value={pharmacyOrg ? getReferenceString(pharmacyOrg) : null}
+        onChange={(v) => {
+          const next = preferredPharmacies.find((p) => getReferenceString(p.org) === v)?.org;
+          setPharmacyOrg(next);
+        }}
+        clearable
+      />
+    </>
+  );
+}
+
+interface CompoundLineState {
+  id: string;
+  termMed?: Medication;
+  formatMed?: Medication;
+  quantity: number;
+  refill: number;
+  useSubstitution: boolean;
+}
+
+interface CompoundLineEditorProps {
+  index: number;
+  line: CompoundLineState;
+  searchMedications: (p: { term?: string; routedMedId?: number; gcnSeqnos?: number[] }) => Promise<Medication[]>;
+  onChange: (line: CompoundLineState) => void;
+}
+
+function CompoundLineEditor(props: Readonly<CompoundLineEditorProps>): JSX.Element {
+  const { index, line, searchMedications, onChange } = props;
+  const [formats, setFormats] = useState<Medication[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadOpts = useCallback(
+    async (input: string, signal: AbortSignal): Promise<Medication[]> => {
+      const t = input.trim();
+      if (t.length < 2) {
+        return [];
+      }
+      const list = await searchMedications({ term: t });
+      if (signal.aborted) {
+        return [];
+      }
+      return dedupeMedications(list);
+    },
+    [searchMedications]
+  );
+
+  const handleMedicationChange = async (m: Medication | undefined): Promise<void> => {
+    if (!m) {
+      setFormats([]);
+      onChange({ ...line, termMed: undefined, formatMed: undefined });
+      return;
+    }
+    const rid = getRoutedMedIdFromMedication(m);
+    if (rid === undefined) {
+      setFormats([]);
+      onChange({ ...line, termMed: m, formatMed: m });
+      return;
+    }
+    setLoading(true);
+    try {
+      const list = dedupeMedications(
+        await searchMedications({ routedMedId: rid, gcnSeqnos: getGcnSeqnosFromMedication(m) })
+      );
+      setFormats(list);
+      onChange({ ...line, termMed: m, formatMed: list[0] ?? m });
+    } catch (e) {
+      showErrorNotification(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <PaperWithTitle title={`Drug line ${index + 1}`}>
+      <Stack gap="sm">
+        <AsyncAutocomplete<Medication>
+          label="Search"
+          placeholder="Drug name"
+          maxValues={1}
+          minInputLength={2}
+          loadOptions={loadOpts}
+          toOption={medicationSearchToOption}
+          defaultValue={line.termMed}
+          onChange={(items) => {
+            handleMedicationChange(items[0]).catch(showErrorNotification);
+          }}
+        />
+        {loading && <Text size="xs">Loading formulations…</Text>}
+        {formats.length > 1 && (
+          <Radio.Group
+            label="Formulation"
+            value={line.formatMed ? String(formats.indexOf(line.formatMed)) : ''}
+            onChange={(v) => {
+              const fm = formats[Number.parseInt(v, 10)];
+              onChange({ ...line, formatMed: fm });
+            }}
+          >
+            <Stack gap={4}>
+              {formats.map((fm, i) => (
+                <Radio key={medicationDedupeKey(fm)} value={String(i)} label={fm.code?.text ?? `Option ${i + 1}`} />
+              ))}
+            </Stack>
+          </Radio.Group>
+        )}
+        <Group grow>
+          <NumberInput
+            label="Quantity"
+            value={line.quantity}
+            onChange={(v) => onChange({ ...line, quantity: Number(v) || 0 })}
+            min={0}
+          />
+          <NumberInput
+            label="Refills"
+            value={line.refill}
+            onChange={(v) => onChange({ ...line, refill: Number(v) || 0 })}
+            min={0}
+          />
+        </Group>
+        <Checkbox
+          label="Allow substitution"
+          checked={line.useSubstitution}
+          onChange={(e) => onChange({ ...line, useSubstitution: e.currentTarget.checked })}
+        />
+      </Stack>
+    </PaperWithTitle>
+  );
+}
+
+function PaperWithTitle(props: Readonly<{ title: string; children: ReactNode }>): JSX.Element {
+  const { title, children } = props;
+  return (
+    <Stack gap="xs">
+      <Text fw={600}>{title}</Text>
+      {children}
+    </Stack>
+  );
+}

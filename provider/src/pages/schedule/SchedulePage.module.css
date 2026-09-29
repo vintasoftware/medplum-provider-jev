@@ -1,0 +1,4 @@
+.page {
+  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-8));
+  height: calc(100vh - var(--jev-coach-height, 0px));
+}

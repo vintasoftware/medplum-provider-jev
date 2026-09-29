@@ -1,0 +1,27 @@
+{
+  "discharge_summary": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
+  "prior_note": "Hypertension follow-up. BP 142/90. Tolerating lisinopril without cough or dizziness. Plan: Continue lisinopril 10 mg daily. Recheck in 3 months.",
+  "visit_story": "BP 138/86, no dizziness, tolerating medications.",
+  "variants": [
+    {
+      "id": "shortcut-from-chart",
+      "expected": "potential_conflict",
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril 10 mg daily. Recheck BP in 4 weeks."
+    },
+    {
+      "id": "resolved-after-edit",
+      "expected": "agreement",
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks."
+    },
+    {
+      "id": "no-dose",
+      "expected": "insufficient_information",
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril. Recheck BP in 4 weeks."
+    },
+    {
+      "id": "unexplained-40mg",
+      "expected": "potential_conflict",
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: increase lisinopril to 40 mg daily. Recheck BP in 4 weeks."
+    }
+  ]
+}

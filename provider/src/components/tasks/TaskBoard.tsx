@@ -1,0 +1,318 @@
+// SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
+// SPDX-License-Identifier: Apache-2.0
+import { ActionIcon, Flex, Text, Tooltip } from '@mantine/core';
+import type { SearchRequest, WithId } from '@medplum/core';
+import { Operator, parseSearchRequest } from '@medplum/core';
+import type { CodeableConcept, Task } from '@medplum/fhirtypes';
+import { ListWithDetailPane, useMedplum } from '@medplum/react';
+import { IconPlus } from '@tabler/icons-react';
+import type { JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useControllableDisclosure } from '../../hooks/useControllableDisclosure';
+import { showErrorNotification } from '../../utils/notifications';
+import { NewTaskModal } from './NewTaskModal';
+import { TaskDetailPanel } from './TaskDetailPanel';
+import { TaskFilterMenu } from './TaskFilterMenu';
+import type { TaskFilterValue } from './TaskFilterMenu.utils';
+import { TaskFilterType } from './TaskFilterMenu.utils';
+import { TaskListItem } from './TaskListItem';
+import { TaskSelectEmpty } from './TaskSelectEmpty';
+
+interface FilterState {
+  performerType: CodeableConcept | undefined;
+}
+
+/**
+ * TaskBoardProps is the props for the TaskBoard component.
+ * @property query - The query string for the search request.
+ * @property selectedTaskId - The ID of the selected task.
+ * @property onDelete - The function to call when a task is deleted.
+ * @property onNew - The function to call when a new task is created.
+ * @property onChange - The function to call when the search request changes.
+ * @property getTaskUri - The function to call to get the URI of a task.
+ * @property myTasksUri - The URI for the my tasks search request.
+ * @property allTasksUri - The URI for the all tasks search request.
+ * @property newTaskOpened - Controlled open state for the new task modal. When provided, use `onNewTaskOpen` and `onNewTaskClose` to update it.
+ * @property onNewTaskOpen - Called when the user clicks the new task button. Required when `newTaskOpened` is provided.
+ * @property onNewTaskClose - Called when the new task modal is closed. Required when `newTaskOpened` is provided.
+ * @returns The TaskBoard component.
+ */
+interface TaskBoardProps {
+  query: string;
+  selectedTaskId: string | undefined;
+  onDelete: (task: Task) => void;
+  onNew: (task: Task) => void;
+  onChange: (search: SearchRequest) => void;
+  getTaskUri: (task: Task) => string;
+  myTasksUri: string;
+  allTasksUri: string;
+  newTaskOpened?: boolean;
+  onNewTaskOpen?: () => void;
+  onNewTaskClose?: () => void;
+}
+
+export function TaskBoard({
+  query,
+  selectedTaskId,
+  onDelete,
+  onNew,
+  onChange,
+  getTaskUri,
+  myTasksUri,
+  allTasksUri,
+  newTaskOpened,
+  onNewTaskOpen,
+  onNewTaskClose,
+}: TaskBoardProps): JSX.Element {
+  const medplum = useMedplum();
+  const navigate = useNavigate();
+  const [tasks, setTasks] = useState<WithId<Task>[]>([]);
+  const [selectedTask, setSelectedTask] = useState<WithId<Task> | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [memoizedQuery, setMemoizedQuery] = useState(query);
+  const [performerTypes, setPerformerTypes] = useState<CodeableConcept[]>([]);
+  const [newTaskModalOpened, { open: openNewTaskModal, close: closeNewTaskModal }] = useControllableDisclosure({
+    opened: newTaskOpened,
+    onOpen: onNewTaskOpen,
+    onClose: onNewTaskClose,
+  });
+  const [total, setTotal] = useState<number | undefined>(undefined);
+  const requestIdRef = useRef(0);
+
+  const [filters, setFilters] = useState<FilterState>({
+    performerType: undefined,
+  });
+
+  // Adjust state during render (useResourceBoard pattern) so a new query shows the
+  // skeleton on that same render — the auto-select effect never acts on the previous
+  // query's tasks (e.g. selecting the old tab's first task).
+  if (query !== memoizedQuery) {
+    setMemoizedQuery(query);
+    setLoading(true);
+  }
+
+  // Parse pagination and status filters from query
+  const searchParams = useMemo(() => new URLSearchParams(query), [query]);
+  const itemsPerPage = Number.parseInt(searchParams.get('_count') || '20', 10);
+  const currentOffset = Number.parseInt(searchParams.get('_offset') || '0', 10);
+  const currentPage = Math.floor(currentOffset / itemsPerPage) + 1;
+  const isMyTasks = searchParams.has('owner');
+
+  // Parse current search from query string
+  const currentSearch = useMemo(() => parseSearchRequest(`Task?${query}`), [query]);
+
+  const selectedStatuses = useMemo(() => parseFilterValues<Task['status']>(currentSearch, 'status'), [currentSearch]);
+
+  const selectedPriorities = useMemo(
+    () => parseFilterValues<NonNullable<Task['priority']>>(currentSearch, 'priority'),
+    [currentSearch]
+  );
+
+  const fetchTasks = useCallback(async (): Promise<void> => {
+    const currentRequestId = ++requestIdRef.current;
+
+    try {
+      const tasks = await medplum.searchResources('Task', memoizedQuery, { cache: 'no-cache' });
+
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
+
+      let results = [...tasks];
+
+      if (tasks.bundle.total !== undefined) {
+        setTotal(tasks.bundle.total);
+      }
+
+      const allPerformerTypes = results.flatMap((task) => task.performerType || []);
+
+      if (filters.performerType) {
+        results = results.filter(
+          (task) => task.performerType?.[0]?.coding?.[0]?.code === filters.performerType?.coding?.[0]?.code
+        );
+      }
+
+      setPerformerTypes(allPerformerTypes);
+      setTasks(results);
+    } catch (error) {
+      if (currentRequestId === requestIdRef.current) {
+        throw error;
+      }
+    } finally {
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [medplum, filters.performerType, memoizedQuery]);
+
+  useEffect(() => {
+    fetchTasks().catch(showErrorNotification);
+  }, [fetchTasks]);
+
+  useEffect(() => {
+    const handleTaskSelection = async (): Promise<void> => {
+      if (selectedTaskId) {
+        const task = tasks.find((task) => task.id === selectedTaskId);
+        if (task) {
+          setSelectedTask(task);
+        } else {
+          const task = await medplum.readResource('Task', selectedTaskId);
+          setSelectedTask(task);
+        }
+      } else {
+        setSelectedTask(undefined);
+      }
+    };
+
+    handleTaskSelection().catch(() => {
+      setSelectedTask(undefined);
+    });
+  }, [selectedTaskId, tasks, medplum, navigate]);
+
+  const handleNewTaskCreated = (task: Task): void => {
+    fetchTasks().catch(showErrorNotification);
+    onNew(task);
+  };
+
+  const handleTaskChange = async (_task: Task): Promise<void> => {
+    await fetchTasks().catch(showErrorNotification);
+  };
+
+  const handleDeleteTask = async (task: Task): Promise<void> => {
+    await fetchTasks().catch(showErrorNotification);
+    onDelete(task);
+  };
+
+  const handleFilterChange = (filterType: TaskFilterType, value: TaskFilterValue): void => {
+    switch (filterType) {
+      case TaskFilterType.STATUS:
+        onChange(toggleFilterValue(currentSearch, 'status', selectedStatuses, value as Task['status']));
+        break;
+      case TaskFilterType.PRIORITY:
+        onChange(
+          toggleFilterValue(currentSearch, 'priority', selectedPriorities, value as NonNullable<Task['priority']>)
+        );
+        break;
+      case TaskFilterType.PERFORMER_TYPE: {
+        const performerTypeCode = filters.performerType?.coding?.[0]?.code;
+        const valueCode = (value as CodeableConcept)?.coding?.[0]?.code;
+        setFilters((prev) => ({
+          ...prev,
+          performerType: performerTypeCode !== valueCode ? (value as CodeableConcept) : undefined,
+        }));
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  const handleClearAllFilters = (): void => {
+    const otherFilters = currentSearch.filters?.filter((f) => f.code !== 'status' && f.code !== 'priority') || [];
+    onChange({
+      ...currentSearch,
+      filters: otherFilters,
+      offset: 0,
+    });
+    setFilters((prev) => ({ ...prev, performerType: undefined }));
+  };
+
+  const tabs = [
+    { value: 'my', label: 'My Tasks', uri: myTasksUri },
+    { value: 'all', label: 'All Tasks', uri: allTasksUri },
+  ];
+
+  const headerActions = (
+    <>
+      <TaskFilterMenu
+        statuses={selectedStatuses}
+        priorities={selectedPriorities}
+        performerType={filters.performerType}
+        performerTypes={performerTypes}
+        onFilterChange={handleFilterChange}
+        onClearAllFilters={handleClearAllFilters}
+      />
+      <Tooltip label="New Task" position="bottom" openDelay={500}>
+        <ActionIcon radius="xl" variant="filled" color="blue" size={32} onClick={openNewTaskModal}>
+          <IconPlus size={16} />
+        </ActionIcon>
+      </Tooltip>
+    </>
+  );
+
+  const selectedKey = selectedTask?.id ?? selectedTaskId;
+
+  return (
+    <>
+      <ListWithDetailPane<WithId<Task>>
+        items={tasks}
+        loading={loading}
+        selectedKey={selectedKey}
+        onSelectFirst={(task) => navigate(getTaskUri(task), { replace: true })?.catch(console.error)}
+        renderItem={(task) => <TaskListItem task={task} getTaskUri={getTaskUri} />}
+        emptyList={<EmptyTasksState />}
+        tabs={tabs}
+        activeTab={isMyTasks ? 'my' : 'all'}
+        headerActions={headerActions}
+        selected={selectedTask}
+        renderDetail={(task) => (
+          <TaskDetailPanel task={task} onTaskChange={handleTaskChange} onDeleteTask={handleDeleteTask} />
+        )}
+        emptyDetail={<TaskSelectEmpty />}
+        refresh={fetchTasks}
+        page={currentPage}
+        pageCount={total !== undefined ? Math.ceil(total / itemsPerPage) : 0}
+        onPageChange={(page) => {
+          onChange({
+            ...currentSearch,
+            offset: (page - 1) * itemsPerPage,
+          });
+        }}
+      />
+
+      <NewTaskModal opened={newTaskModalOpened} onClose={closeNewTaskModal} onTaskCreated={handleNewTaskCreated} />
+    </>
+  );
+}
+
+function EmptyTasksState(): JSX.Element {
+  return (
+    <Flex direction="column" h="100%" justify="center" align="center" pt="xl">
+      <Text c="dimmed" fw={500}>
+        No tasks available.
+      </Text>
+    </Flex>
+  );
+}
+
+function parseFilterValues<T extends string>(search: SearchRequest, code: string): T[] {
+  const values: T[] = [];
+  for (const filter of search.filters?.filter((f) => f.code === code) || []) {
+    for (const raw of filter.value.split(',')) {
+      const v = raw.trim() as T;
+      if (v && !values.includes(v)) {
+        values.push(v);
+      }
+    }
+  }
+  return values;
+}
+
+function toggleFilterValue<T extends string>(
+  search: SearchRequest,
+  code: string,
+  selected: T[],
+  value: T
+): SearchRequest {
+  const updated = selected.includes(value) ? selected.filter((s) => s !== value) : [...selected, value];
+  const otherFilters = search.filters?.filter((f) => f.code !== code) || [];
+  return {
+    ...search,
+    filters:
+      updated.length > 0
+        ? [...otherFilters, { code, operator: Operator.EQUALS, value: updated.join(',') }]
+        : otherFilters,
+    offset: 0,
+  };
+}

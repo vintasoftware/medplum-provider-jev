@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+artifacts/
+*.pem
+*.key
+
+node_modules/
+dist/
+.env.*.local
+.env.local
+.pytest_cache/
+bot-dist/
+
+# Written by `npm --prefix provider run setup`; holds this checkout's Bot id.
+provider/medplum.config.json
+
+# Video tooling outputs.
+videos/out/
+videos/marketing/frames/
+videos/marketing/preview/
+videos/marketing/audio/
+videos/marketing/ui.webm
+videos/marketing/ui-events.json
+videos/marketing/soundtrack.wav

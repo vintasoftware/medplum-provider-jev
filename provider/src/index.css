@@ -1,0 +1,178 @@
+.mantine-ActionIcon-root:active {
+  transform: none;
+}
+
+/* Pill-style tabs used across Tasks, Messages, Labs, and Patient tabs */
+.pill-tabs .mantine-Tabs-list {
+  display: flex;
+  gap: 4px;
+}
+
+.pill-tabs .mantine-Tabs-tab {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--mantine-radius-xl);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 450;
+  background-color: transparent;
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.pill-tabs .mantine-Tabs-tab:hover {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-gray-8));
+}
+
+.pill-tabs .mantine-Tabs-tab[data-active] {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-gray-7));
+  color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-white));
+}
+
+.pill-tabs .mantine-Tabs-tab[data-active]:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-gray-7));
+  color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-white));
+}
+
+/* Outline-style ActionIcon buttons (filter, delete, lock, etc.) */
+.mantine-ActionIcon-root.outline-icon-button {
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-gray-6));
+  transition: border-color 150ms ease;
+}
+
+.mantine-ActionIcon-root.outline-icon-button:hover,
+.mantine-ActionIcon-root.outline-icon-button[data-opened] {
+  border-color: light-dark(var(--mantine-color-gray-5), var(--mantine-color-gray-5));
+}
+
+.mantine-ActionIcon-root.outline-icon-button svg {
+  color: var(--mantine-color-gray-6);
+}
+
+/* Menu item styles */
+.mantine-Menu-item {
+  border-radius: var(--mantine-radius-sm);
+}
+
+.mantine-Menu-item:hover,
+.mantine-Menu-item[data-hovered] {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+}
+
+.filter-submenu-dropdown {
+  min-width: 200px;
+}
+
+.grecaptcha-badge {
+  visibility: hidden;
+}
+
+/* Guided demo tutorial popover (Driver.js), styled with Mantine variables for both schemes. */
+.driver-popover.jev-tour-popover {
+  font-family: var(--mantine-font-family);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-md);
+  box-shadow: var(--mantine-shadow-md);
+  max-width: 360px;
+}
+
+.jev-tour-popover .driver-popover-title {
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-lg);
+  font-weight: 600;
+}
+
+.jev-tour-popover .jev-tour-progress {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 500;
+  color: var(--mantine-color-dimmed);
+}
+
+.jev-tour-popover .driver-popover-description {
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+  color: var(--mantine-color-text);
+}
+
+.jev-tour-popover .driver-popover-close-btn {
+  color: var(--mantine-color-dimmed);
+}
+
+.jev-tour-popover .driver-popover-close-btn:hover,
+.jev-tour-popover .driver-popover-close-btn:focus {
+  color: var(--mantine-color-text);
+}
+
+.jev-tour-popover .driver-popover-footer button {
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  text-shadow: none;
+  border: none;
+  border-radius: var(--mantine-radius-sm);
+  padding: 4px 12px;
+  background: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-light-color);
+}
+
+.jev-tour-popover .driver-popover-footer button:hover:not(:disabled) {
+  background: var(--mantine-color-blue-light-hover);
+}
+
+.jev-tour-popover .driver-popover-footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jev-tour-popover .driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: var(--mantine-color-body);
+}
+
+.jev-tour-popover .driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: var(--mantine-color-body);
+}
+
+.jev-tour-popover .driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: var(--mantine-color-body);
+}
+
+.jev-tour-popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: var(--mantine-color-body);
+}
+
+/* Guided demo coach bar: a one-line bar above every page while a scenario is active. Pages
+   that size themselves to the viewport subtract --jev-coach-height, so the bar never covers
+   content. It stays visible and clickable above the tutorial backdrop, so Hide tutorial
+   always works. */
+:root:has(.jev-coach) {
+  --jev-coach-height: 44px;
+}
+
+.jev-coach {
+  position: sticky;
+  top: 0;
+  z-index: 10001;
+  height: var(--jev-coach-height);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--app-shell-border-color);
+}
+
+.jev-coach > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.driver-active .jev-coach,
+.driver-active .jev-coach * {
+  pointer-events: auto;
+}

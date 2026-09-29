@@ -1,0 +1,85 @@
+{
+  "description": "tutorial walks the primary path: conflict, edit, agreement, sign",
+  "recorded_at": "2026-09-24T12:07:48.105Z",
+  "contract_sha256": "c20f9cf137532963ea9bacf65c7e010d320cae5406ace2107e4b80bb5b8902af",
+  "interactions": [
+    {
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril 10 mg daily. Recheck BP in 4 weeks.",
+      "response": {
+        "status": "ok",
+        "checked_at": "{{now}}",
+        "model": "jev-1.13.0",
+        "input_tokens": 1069,
+        "results": [
+          {
+            "medication": "lisinopril",
+            "choice": "potential_conflict",
+            "probabilities": {
+              "insufficient_information": 0,
+              "potential_conflict": 1,
+              "agreement": 0
+            },
+            "confidence": 1,
+            "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.",
+            "sentence_note": "Plan: continue lisinopril 10 mg daily."
+          }
+        ],
+        "mentions_hospital_stay": 0.36,
+        "documents": [
+          {
+            "title": "Discharge summary",
+            "date": "2026-09-17",
+            "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
+            "source": "DocumentReference/{{documentReferenceId}}"
+          },
+          {
+            "title": "Today's visit note",
+            "date": "2026-09-24",
+            "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril 10 mg daily. Recheck BP in 4 weeks.",
+            "source": "ClinicalImpression/{{clinicalImpressionId}}"
+          }
+        ],
+        "note_version": "{{noteVersion}}"
+      }
+    },
+    {
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.",
+      "response": {
+        "status": "ok",
+        "checked_at": "{{now}}",
+        "model": "jev-1.13.0",
+        "input_tokens": 1081,
+        "results": [
+          {
+            "medication": "lisinopril",
+            "choice": "agreement",
+            "probabilities": {
+              "agreement": 1,
+              "insufficient_information": 0,
+              "potential_conflict": 0
+            },
+            "confidence": 1,
+            "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.",
+            "sentence_note": "Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks."
+          }
+        ],
+        "mentions_hospital_stay": 0.7,
+        "documents": [
+          {
+            "title": "Discharge summary",
+            "date": "2026-09-17",
+            "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
+            "source": "DocumentReference/{{documentReferenceId}}"
+          },
+          {
+            "title": "Today's visit note",
+            "date": "2026-09-24",
+            "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.",
+            "source": "ClinicalImpression/{{clinicalImpressionId}}"
+          }
+        ],
+        "note_version": "{{noteVersion}}"
+      }
+    }
+  ]
+}

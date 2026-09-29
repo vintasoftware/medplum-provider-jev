@@ -1,0 +1,45 @@
+{
+  "description": "side path: a note with no dose is insufficient information",
+  "recorded_at": "2026-09-24T12:08:57.372Z",
+  "contract_sha256": "c20f9cf137532963ea9bacf65c7e010d320cae5406ace2107e4b80bb5b8902af",
+  "interactions": [
+    {
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril. Recheck BP in 4 weeks.",
+      "response": {
+        "status": "ok",
+        "checked_at": "{{now}}",
+        "model": "jev-1.13.0",
+        "input_tokens": 1059,
+        "results": [
+          {
+            "medication": "lisinopril",
+            "choice": "insufficient_information",
+            "probabilities": {
+              "agreement": 0.07,
+              "potential_conflict": 0.02,
+              "insufficient_information": 0.91
+            },
+            "confidence": 0.87,
+            "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension."
+          }
+        ],
+        "mentions_hospital_stay": 0.41,
+        "documents": [
+          {
+            "title": "Discharge summary",
+            "date": "2026-09-17",
+            "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
+            "source": "DocumentReference/{{documentReferenceId}}"
+          },
+          {
+            "title": "Today's visit note",
+            "date": "2026-09-24",
+            "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril. Recheck BP in 4 weeks.",
+            "source": "ClinicalImpression/{{clinicalImpressionId}}"
+          }
+        ],
+        "note_version": "{{noteVersion}}"
+      }
+    }
+  ]
+}
