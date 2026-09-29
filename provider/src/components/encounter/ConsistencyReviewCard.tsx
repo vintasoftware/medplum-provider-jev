@@ -374,6 +374,12 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
                 )}
               </Table.Tbody>
             </Table>
+            {headline.label_rule === 'no_dose_sentence' && (
+              <Text size="xs" c="dimmed">
+                Label set by rule: the model found no sentence stating a {headline.medication} dose in one document, so
+                the check reports insufficient information. The scores above are the model's own.
+              </Text>
+            )}
             <Text size="xs" c="dimmed">
               Confidence {headline.confidence.toFixed(2)} · model {stored.model} · {stored.input_tokens} input tokens ·
               checked {formatDateTime(stored.checked_at)}. Scores are model probabilities, not validated clinical

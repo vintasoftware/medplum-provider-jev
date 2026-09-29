@@ -10,7 +10,7 @@ The discharge summary has the information the provider needs, but it sits in a s
 
 This project adds that check to the open-source [Medplum Provider App](https://github.com/medplum/medplum/tree/main/examples/medplum-provider). When the provider finishes a visit, a Medplum Bot asks a decision model whether the note and the latest outside discharge summary agree on each active medication's dose. A review card shows the answer beside both passages. The provider can then correct the note, explain why the plan differs, or ask someone to reconcile the medication. The model never changes the chart, blocks signing or chooses a treatment.
 
-The guided demo runs end to end with TypeSafe's hosted Jev. It lets us test both the document comparison and what happens after a provider sees the result. An open, self-hosted model is also under evaluation, though it cannot run the full demo yet.
+The guided demo runs end to end with TypeSafe's hosted Jev. It lets us test both the document comparison and what happens after a provider sees the result. An open, self-hosted model runs the same demo and is under evaluation.
 
 ## Following the discrepancy through a visit
 
@@ -118,9 +118,9 @@ There are still checks to complete. The policy's refusals for secrets, admin rou
 
 ## Evaluating an open model
 
-Hosted Jev runs the working demo. To explore running the model in our own account, we also deployed the Apache-2.0 Decider model on a private Modal GPU. That endpoint has produced one verified prediction: for two same-day discharge documents listing 10 mg and 20 mg, it returned `potential_conflict` at 0.711, using 186 input tokens and 829.1 ms of server-side inference. It still accepts only a case id, so it cannot yet process the visit text used by the guided demo. [SELF-HOSTING.md](SELF-HOSTING.md) describes that deployment and its limits.
+Hosted Jev runs the working demo. To explore running the model in our own account, we also deployed the Apache-2.0 Decider model on a private Modal GPU. That endpoint has produced one verified prediction: for two same-day discharge documents listing 10 mg and 20 mg, it returned `potential_conflict` at 0.711, using 186 input tokens and 829.1 ms of server-side inference. It now also accepts the Bot's own request, so the guided visit runs on it. On the five authored dose cases and four scenario notes, every highlight picked the expected sentence and seven labels matched the authored reference. It flagged both dated dose changes as conflicts, and it labeled the note with no dose `agreement` even though its own highlight found no dose sentence; for this backend the Bot reports that case as insufficient information. Warm checks took about 0.4 s. [SELF-HOSTING.md](SELF-HOSTING.md) describes that deployment and its limits.
 
-![One project secret, CONSISTENCY_BACKEND, switches between hosted Jev (the default, which runs the guided demo: an API key, per-request cost, PHI needs a BAA or DPA with TypeSafe) and Decider on Modal (one verified prediction: an open checkpoint on a private GPU Server, about $4.29 per warm GPU hour and scaling to zero, PHI under Modal's Enterprise BAA plus Medplum's BAA plan).](article/images/backends.png)
+![One project secret, CONSISTENCY_BACKEND, switches between hosted Jev (the default, which runs the guided demo: an API key, per-request cost, PHI needs a BAA or DPA with TypeSafe) and Decider on Modal (under evaluation: the same request, an open checkpoint on a private GPU Server, about $4.29 per warm GPU hour and scaling to zero, PHI under Modal's Enterprise BAA plus Medplum's BAA plan).](article/images/backends.png)
 
 We chose Decider after inspecting all 31 open entries in the September 22 Decision Index snapshot. Among trained entries, its NVFP4 configuration led the headline index:
 
@@ -153,7 +153,7 @@ Those agreements would cover only part of the work needed for patient data. The 
 
 ## Taking the demo further
 
-The immediate next step for Decider is to accept the Bot's document text instead of a case id. That would let us run the same guided visit against either backend and evaluate both on the same workflow. The proposed [text contract](SELF-HOSTING.md#next-step-a-text-contract) describes what remains to implement.
+The immediate next step for Decider is a larger evaluation on the same workflow as hosted Jev, with clinician-reviewed labels. The first run already shows where to look: missing doses and dated changes. [SELF-HOSTING.md](SELF-HOSTING.md#5-run-the-guided-demo-on-it) shows how to switch the demo to it.
 
 The workflow could also support a different check: whether a signed note and its addenda support the diagnoses submitted on a claim. Before **Submit Claim** in Details & Billing, a Bot could ask one Choice per diagnosis the provider added: `supported`, `not_supported` or `insufficient_documentation`. The provider would resolve each result with an addendum or by removing the diagnosis; the model would never propose or change a code. We estimate two to three days of implementation on top of this demo.
 

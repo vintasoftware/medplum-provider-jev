@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { buildRequest, splitSentences } from '../bots/consistency';
 import contract from '../src/data/model-contract.json';
 import type { MeasurementCase } from './measure-jev';
-import { measure, measurementCases } from './measure-jev';
+import { measure, measurementCases, modalEndpoint, typesafeEndpoint } from './measure-jev';
 
 function answer(item: MeasurementCase, pickNote: boolean): unknown {
   const noteSentences = splitSentences(item.note.text);
@@ -72,7 +72,7 @@ describe('measure-jev', () => {
     const log: string[] = [];
     const ok = await measure({
       rounds: 1,
-      apiKey: 'ts-secret',
+      endpoint: typesafeEndpoint('ts-secret'),
       outFile: file,
       cases,
       fetch: fetchMock as any,
@@ -98,7 +98,7 @@ describe('measure-jev', () => {
     const file = outFile();
     const ok = await measure({
       rounds: 1,
-      apiKey: 'k',
+      endpoint: typesafeEndpoint('k'),
       outFile: file,
       cases,
       fetch: fetchMock as any,
@@ -117,7 +117,7 @@ describe('measure-jev', () => {
     const file = outFile();
     const ok = await measure({
       rounds: 1,
-      apiKey: 'k',
+      endpoint: typesafeEndpoint('k'),
       outFile: file,
       cases,
       fetch: (async () => new Response(JSON.stringify(bad))) as any,
@@ -125,5 +125,59 @@ describe('measure-jev', () => {
     });
     expect(ok).toBe(0);
     expect(JSON.parse(readFileSync(file, 'utf8')).error).toBe('Request or response validation failed');
+  });
+
+  test('sends the same request to the Modal Server with its proxy token', async () => {
+    const [item] = measurementCases();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer(item, true))));
+    await measure({
+      rounds: 1,
+      endpoint: modalEndpoint('https://example.us-east.modal.direct/', 'wk-a', 'ws-b'),
+      outFile: outFile(),
+      cases: [item],
+      fetch: fetchMock as any,
+      log: () => undefined,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://example.us-east.modal.direct/v1/systemone');
+    expect(init.headers).toMatchObject({ 'Modal-Key': 'wk-a', 'Modal-Secret': 'ws-b' });
+    expect(JSON.parse(init.body as string)).toEqual(buildRequest([item.medication], item.outside, item.note));
+    expect(() => modalEndpoint('https://example.modal.run/check', 'k', 's')).toThrow('HTTPS Modal Server origin');
+  });
+
+  test('applies the no-dose rule for the Modal backend only and records the model label', async () => {
+    const item = measurementCases().find((c) => c.id === 'scenario-no-dose') as MeasurementCase;
+    const count = splitSentences(item.note.text).length;
+    const none = {
+      type: 'choice',
+      choice: 'none',
+      probabilities: {
+        ...Object.fromEntries(Array.from({ length: count }, (_, n) => [`s${n + 1}`, 0.1 / count])),
+        none: 0.9,
+      },
+    };
+    const response = answer(item, false) as { answers: Record<string, unknown> };
+    const body = JSON.stringify({ ...response, answers: { ...response.answers, sentence_visit_note_0: none } });
+    const rows = [];
+    for (const endpoint of [modalEndpoint('https://example.modal.run', 'k', 's'), typesafeEndpoint('k')]) {
+      const file = outFile();
+      await measure({
+        rounds: 1,
+        endpoint,
+        outFile: file,
+        cases: [item],
+        fetch: (async () => new Response(body)) as any,
+        log: () => undefined,
+      });
+      rows.push(JSON.parse(readFileSync(file, 'utf8')));
+    }
+    expect(rows[0].result).toMatchObject({
+      choice: 'insufficient_information',
+      model_choice: 'agreement',
+      label_rule: 'no_dose_sentence',
+    });
+    expect(rows[0].matches_reference).toBe(true);
+    expect(rows[1].result.choice).toBe('agreement');
+    expect(rows[1].result.label_rule).toBeUndefined();
   });
 });

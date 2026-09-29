@@ -125,7 +125,8 @@ export function buildDetectedIssue(
           `${REVIEW_LABELS[r.choice]} (${r.medication}): ` +
           contract.labels
             .map((l) => `${REVIEW_LABELS[l as ReviewLabel]} ${percent(r.probabilities[l as ReviewLabel])}`)
-            .join(', ')
+            .join(', ') +
+          (r.label_rule === 'no_dose_sentence' ? ' (label set by rule: no dose sentence in one document)' : '')
       )
       .join('; '),
     evidence: [

@@ -1,18 +1,20 @@
-// Measures hosted Jev on the authored dose cases and the guided-scenario notes, with exactly
+// Measures the model on the authored dose cases and the guided-scenario notes, with exactly
 // the state and questions the Bot sends (built by the Bot's own buildRequest).
 //
-//   npm --prefix provider run measure                 # one round
+//   npm --prefix provider run measure                     # hosted Jev, one round
 //   npm --prefix provider run measure -- --rounds 3
+//   npm --prefix provider run measure -- --backend modal  # Decider on the private Modal Server
 //
-// Needs TYPESAFE_API_KEY in the environment or the root .env. Writes
-// artifacts/typesafe-run-<UTC>.jsonl and stops on the first failed or invalid response; it
+// Hosted Jev needs TYPESAFE_API_KEY; Modal needs CONSISTENCY_MODEL_URL, CONSISTENCY_MODAL_KEY
+// and CONSISTENCY_MODAL_SECRET, in the environment or the root .env. Writes
+// artifacts/<backend>-run-<UTC>.jsonl and stops on the first failed or invalid response; it
 // never substitutes an authored label for a model answer.
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { buildRequest, splitSentences } from '../bots/consistency.ts';
+import { buildRequest, modalOrigin, noDoseSentence, splitSentences } from '../bots/consistency.ts';
 import scenario from '../src/data/guided-scenario.json' with { type: 'json' };
 import contract from '../src/data/model-contract.json' with { type: 'json' };
 import { REPO_ROOT } from './configure-provider.ts';
@@ -86,9 +88,34 @@ function validDose(answer: any): boolean {
   );
 }
 
+/** `noDoseRule`: apply the Bot's no-dose rule, as the Bot does for this backend. */
+export type Endpoint = { name: string; url: string; headers: Record<string, string>; noDoseRule: boolean };
+
+export function typesafeEndpoint(apiKey: string): Endpoint {
+  return {
+    name: 'hosted Jev',
+    url: contract.endpoint,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    noDoseRule: false,
+  };
+}
+
+export function modalEndpoint(url: string, key: string, secret: string): Endpoint {
+  const origin = modalOrigin(url);
+  if (!origin) {
+    throw new Error('Set CONSISTENCY_MODEL_URL to the HTTPS Modal Server origin');
+  }
+  return {
+    name: 'self-hosted Decider',
+    url: `${origin}/v1/systemone`,
+    headers: { 'Modal-Key': key, 'Modal-Secret': secret },
+    noDoseRule: true,
+  };
+}
+
 export interface MeasureOptions {
   rounds: number;
-  apiKey: string;
+  endpoint: Endpoint;
   outFile: string;
   cases?: MeasurementCase[];
   fetch?: typeof fetch;
@@ -97,7 +124,7 @@ export interface MeasureOptions {
 
 /** Runs the measurement; returns the number of successful answers. */
 export async function measure(options: MeasureOptions): Promise<number> {
-  const { rounds, apiKey, outFile } = options;
+  const { rounds, endpoint, outFile } = options;
   const log = options.log ?? console.log;
   const doFetch = options.fetch ?? fetch;
   const cases = options.cases ?? measurementCases();
@@ -114,10 +141,10 @@ export async function measure(options: MeasureOptions): Promise<number> {
       };
       let failed = false;
       try {
-        const response = await doFetch(contract.endpoint, {
+        const response = await doFetch(endpoint.url, {
           method: 'POST',
           redirect: 'error',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          headers: { 'Content-Type': 'application/json', ...endpoint.headers },
           body: JSON.stringify(buildRequest([item.medication], item.outside, item.note)),
         });
         row.http_status = response.status;
@@ -131,13 +158,20 @@ export async function measure(options: MeasureOptions): Promise<number> {
         }
         const outside = sentenceFor(data.answers.sentence_outside_document_0, item.outside.text);
         const note = sentenceFor(data.answers.sentence_visit_note_0, item.note.text);
+        const ruled =
+          endpoint.noDoseRule &&
+          dose.choice !== 'insufficient_information' &&
+          noDoseSentence(data.answers, 0, item.outside.text, item.note.text);
+        const choice = ruled ? 'insufficient_information' : dose.choice;
         row.result = {
           model: data.model,
-          choice: dose.choice,
+          choice,
+          ...(ruled ? { model_choice: dose.choice, label_rule: 'no_dose_sentence' } : {}),
           probabilities: dose.probabilities,
           confidence: dose.confidence,
           mentions_hospital_stay: data.answers.mentions_hospital_stay?.noul,
           usage: data.usage,
+          ...(data.revision ? { revision: data.revision, inference_ms: data.inference_ms } : {}),
           highlight: {
             outside: outside ?? null,
             note: note ?? null,
@@ -145,7 +179,7 @@ export async function measure(options: MeasureOptions): Promise<number> {
             note_ok: highlightOk(item.highlight.note, note),
           },
         };
-        row.matches_reference = dose.choice === item.expected;
+        row.matches_reference = choice === item.expected;
         successful++;
       } catch {
         // Never log the response body: it can echo the request.
@@ -157,8 +191,9 @@ export async function measure(options: MeasureOptions): Promise<number> {
       const r = row.result as any;
       log(
         r
-          ? `  ${item.id.padEnd(30)} ${r.choice.padEnd(25)} ${(r.probabilities[r.choice] as number).toFixed(2)}` +
-              `  ${row.matches_reference ? 'matches' : 'DIFFERS'}  highlights ${r.highlight.outside_ok ? 'ok' : 'X'}/${r.highlight.note_ok ? 'ok' : 'X'}`
+          ? `  ${item.id.padEnd(30)} ${r.choice.padEnd(25)} ${(r.probabilities[r.model_choice ?? r.choice] as number).toFixed(2)}` +
+              `  ${row.matches_reference ? 'matches' : 'DIFFERS'}  highlights ${r.highlight.outside_ok ? 'ok' : 'X'}/${r.highlight.note_ok ? 'ok' : 'X'}` +
+              (r.label_rule ? `  (rule; model said ${r.model_choice})` : '')
           : `  ${item.id.padEnd(30)} failed (HTTP ${row.http_status ?? '-'})`
       );
       if (failed) {
@@ -167,19 +202,37 @@ export async function measure(options: MeasureOptions): Promise<number> {
       }
     }
   }
-  log(`Recorded ${successful} live hosted Jev answers in ${outFile}.`);
+  log(`Recorded ${successful} live ${endpoint.name} answers in ${outFile}.`);
   return successful;
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({ options: { rounds: { type: 'string', default: '1' } } });
+  const { values } = parseArgs({
+    options: { rounds: { type: 'string', default: '1' }, backend: { type: 'string', default: 'typesafe' } },
+  });
   const rounds = Number(values.rounds);
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 5) {
     throw new Error('Use 1 to 5 rounds per deliberate measurement run');
   }
-  const apiKey = (process.env.TYPESAFE_API_KEY ?? readEnv(join(REPO_ROOT, '.env')).TYPESAFE_API_KEY ?? '').trim();
-  if (!apiKey) {
-    throw new Error('Set TYPESAFE_API_KEY in the root .env');
+  const env = readEnv(join(REPO_ROOT, '.env'));
+  const setting = (name: string): string => {
+    const value = (process.env[name] ?? env[name] ?? '').trim();
+    if (!value) {
+      throw new Error(`Set ${name} in the root .env`);
+    }
+    return value;
+  };
+  let endpoint: Endpoint;
+  if (values.backend === 'typesafe') {
+    endpoint = typesafeEndpoint(setting('TYPESAFE_API_KEY'));
+  } else if (values.backend === 'modal') {
+    endpoint = modalEndpoint(
+      setting('CONSISTENCY_MODEL_URL'),
+      setting('CONSISTENCY_MODAL_KEY'),
+      setting('CONSISTENCY_MODAL_SECRET')
+    );
+  } else {
+    throw new Error('--backend must be typesafe or modal');
   }
   const dir = join(REPO_ROOT, 'artifacts');
   mkdirSync(dir, { recursive: true });
@@ -188,7 +241,7 @@ async function main(): Promise<void> {
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z');
   console.log('  case                           choice                    p     reference  highlights (outside/note)');
-  await measure({ rounds, apiKey, outFile: join(dir, `typesafe-run-${stamp}.jsonl`) });
+  await measure({ rounds, endpoint, outFile: join(dir, `${values.backend}-run-${stamp}.jsonl`) });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

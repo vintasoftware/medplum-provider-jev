@@ -3,9 +3,12 @@ import type { ClinicalImpression, DocumentReference, Encounter, MedicationReques
 import contract from '../src/data/model-contract.json' with { type: 'json' };
 
 // Reads the visit note, the newest outside discharge summary and the active medications
-// as the signed-in user (the Bot runs with runAsUser), asks hosted Jev whether the two
+// as the signed-in user (the Bot runs with runAsUser), asks the model whether the two
 // documents agree about each medication's dose, and returns the result. It writes nothing:
 // the review card stores the result as a DetectedIssue under the user's own access.
+//
+// The model is hosted Jev or Decider on a private Modal Server (see SELF-HOSTING.md). Both
+// take the same /v1/systemone request; the CONSISTENCY_BACKEND project secret picks one.
 
 const DISCHARGE_SUMMARY_TYPE = 'http://loinc.org|18842-5';
 const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
@@ -23,6 +26,8 @@ export type ReviewResult = {
   confidence: number;
   sentence_outside?: string;
   sentence_note?: string;
+  /** Set when a rule, not the model's top score, chose `choice`; `probabilities` stay the model's. */
+  label_rule?: 'no_dose_sentence';
 };
 
 export type ReviewOutput =
@@ -208,33 +213,108 @@ async function readChart(
   };
 }
 
-async function callTypeSafe(apiKey: string, body: unknown): Promise<Record<string, any>> {
+type ModelService = {
+  url: string;
+  headers: Record<string, string>;
+  timeoutMs: number;
+  messages: Record<number, string>;
+  /** Apply noDoseSentence to the dose label (SELF-HOSTING.md, step 7). */
+  noDoseRule: boolean;
+};
+
+// Plain messages only: the response body can echo the request, which holds chart text.
+const TYPESAFE_MESSAGES: Record<number, string> = {
+  0: 'The model service could not be reached; retry later',
+  401: 'The model service rejected the project credentials',
+  422: 'The model service rejected the request format',
+  429: 'The model service is rate limited; retry shortly',
+  529: 'The model service is overloaded; retry shortly',
+};
+const MODAL_MESSAGES: Record<number, string> = {
+  // The Bot's Lambda stops after 10 seconds. A cold Server answers 503 at once, and that request schedules a GPU.
+  0: 'The self-hosted model did not answer in time; it may be starting, retry in a few minutes',
+  401: 'The self-hosted model rejected the project credentials',
+  403: 'The self-hosted model rejected the project credentials',
+  413: 'The note is too long for the self-hosted check',
+  422: 'The self-hosted model could not check this note; it may be too long',
+  429: 'The self-hosted model is busy; retry shortly',
+  503: 'The self-hosted model is starting or unavailable; retry in a few minutes',
+};
+
+/** The HTTPS origin of a Modal Server, or undefined for anything else (paths, credentials, other hosts). */
+export function modalOrigin(value: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  const valid =
+    url.protocol === 'https:' &&
+    /\.modal\.(run|direct)$/.test(url.hostname) &&
+    url.pathname === '/' &&
+    !url.search &&
+    !url.hash &&
+    !url.username &&
+    !url.password &&
+    !url.port;
+  return valid ? url.origin : undefined;
+}
+
+function modelService(event: BotEvent): ModelService {
+  const apiKey = optionalSecret(event, 'TYPESAFE_API_KEY');
+  const backend = optionalSecret(event, 'CONSISTENCY_BACKEND') ?? (apiKey ? 'typesafe' : undefined);
+  if (backend === 'typesafe') {
+    if (!apiKey) throw new Unavailable('Missing string project secret: TYPESAFE_API_KEY');
+    return {
+      url: contract.endpoint,
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeoutMs: 30000,
+      messages: TYPESAFE_MESSAGES,
+      noDoseRule: false,
+    };
+  }
+  if (backend === 'modal') {
+    const [url, key, secret] = ['CONSISTENCY_MODEL_URL', 'CONSISTENCY_MODAL_KEY', 'CONSISTENCY_MODAL_SECRET'].map(
+      (name) => {
+        const value = optionalSecret(event, name);
+        if (!value) throw new Unavailable(`Missing string project secret: ${name}`);
+        return value;
+      }
+    );
+    const origin = modalOrigin(url);
+    if (!origin) throw new Unavailable('CONSISTENCY_MODEL_URL must be the HTTPS Modal Server origin');
+    return {
+      url: `${origin}/v1/systemone`,
+      headers: { 'Modal-Key': key, 'Modal-Secret': secret },
+      timeoutMs: 8000,
+      messages: MODAL_MESSAGES,
+      noDoseRule: true,
+    };
+  }
+  throw new Unavailable('Project secret CONSISTENCY_BACKEND must be typesafe or modal');
+}
+
+async function callModel(service: ModelService, body: unknown): Promise<Record<string, any>> {
   for (let attempt = 0; ; attempt++) {
     let response: Response;
     try {
-      response = await fetch(contract.endpoint, {
+      response = await fetch(service.url, {
         method: 'POST',
         redirect: 'error',
-        signal: AbortSignal.timeout(30000),
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(service.timeoutMs),
+        headers: { 'Content-Type': 'application/json', ...service.headers },
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Unavailable('The model service could not be reached; retry later');
+      throw new Unavailable(service.messages[0]);
     }
     if (response.ok) return response.json();
     if ((response.status === 429 || response.status === 529) && attempt === 0) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       continue;
     }
-    // Plain messages only: the response body can echo the request, which holds chart text.
-    const messages: Record<number, string> = {
-      401: 'The model service rejected the project credentials',
-      422: 'The model service rejected the request format',
-      429: 'The model service is rate limited; retry shortly',
-      529: 'The model service is overloaded; retry shortly',
-    };
-    throw new Unavailable(messages[response.status] ?? 'The model service is unavailable');
+    throw new Unavailable(service.messages[response.status] ?? 'The model service is unavailable');
   }
 }
 
@@ -273,33 +353,56 @@ function selectedSentence(answer: any, text: string): string | undefined {
   }
 }
 
-export async function review(medplum: MedplumClient, event: BotEvent, encounterId: string): Promise<ReviewOutput> {
-  const apiKey = optionalSecret(event, 'TYPESAFE_API_KEY');
-  const backend = optionalSecret(event, 'CONSISTENCY_BACKEND') ?? (apiKey ? 'typesafe' : undefined);
-  if (backend === 'modal') {
-    throw new Unavailable(
-      'The self-hosted Modal backend does not accept visit text yet; set CONSISTENCY_BACKEND to typesafe'
-    );
-  }
-  if (backend !== 'typesafe') throw new Unavailable('Project secret CONSISTENCY_BACKEND must be typesafe or modal');
-  if (!apiKey) throw new Unavailable('Missing string project secret: TYPESAFE_API_KEY');
+/**
+ * Whether the highlight questions answered that no sentence of one document states a dose of
+ * medication `i`. An unusable or missing answer counts as no evidence.
+ *
+ * Decider can label a note with no dose `agreement` while its own highlight question finds no
+ * dose sentence. Its dose criteria say a missing dose is insufficient information, so for that
+ * backend the Bot trusts the highlight answer over the dose label.
+ */
+export function noDoseSentence(
+  answers: Record<string, any>,
+  i: number,
+  outsideText: string,
+  noteText: string
+): boolean {
+  return [
+    [answers[`sentence_outside_document_${i}`], outsideText],
+    [answers[`sentence_visit_note_${i}`], noteText],
+  ].some(([answer, text]) => {
+    const sentences = splitSentences(text);
+    try {
+      return readChoice(answer, [...sentences.map((_, n) => `s${n + 1}`), 'none']).choice === 'none';
+    } catch {
+      return false;
+    }
+  });
+}
 
+export async function review(medplum: MedplumClient, event: BotEvent, encounterId: string): Promise<ReviewOutput> {
+  const service = modelService(event);
   const chart = await readChart(medplum, encounterId);
   const body = buildRequest(chart.medications, chart.outside, chart.note);
-  const response = await callTypeSafe(apiKey, body);
+  const response = await callModel(service, body);
   const answers = response?.answers ?? {};
 
   const results = chart.medications.map((medication, i): ReviewResult => {
     const { choice, probabilities } = readChoice(answers[`dose_${i}`], labels);
     const confidence = answers[`dose_${i}`].confidence;
     if (!isProbability(confidence)) throw new Unavailable('The model returned an invalid answer');
+    const ruled =
+      service.noDoseRule &&
+      choice !== 'insufficient_information' &&
+      noDoseSentence(answers, i, chart.outside.text, chart.note.text);
     return {
       medication,
-      choice: choice as Label,
+      choice: ruled ? 'insufficient_information' : (choice as Label),
       probabilities: probabilities as Record<Label, number>,
       confidence,
       sentence_outside: selectedSentence(answers[`sentence_outside_document_${i}`], chart.outside.text),
       sentence_note: selectedSentence(answers[`sentence_visit_note_${i}`], chart.note.text),
+      ...(ruled ? { label_rule: 'no_dose_sentence' as const } : {}),
     };
   });
   const hospital = answers.mentions_hospital_stay;
