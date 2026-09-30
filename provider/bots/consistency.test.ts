@@ -1,13 +1,15 @@
-import type { BotEvent, WithId } from '@medplum/core';
+import type { BotEvent, MedplumRequestOptions, WithId } from '@medplum/core';
+import { ReadablePromise } from '@medplum/core';
 import type { ClinicalImpression, DocumentReference, Encounter, Patient } from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import scenario from '../src/data/guided-scenario.json';
 import contract from '../src/data/model-contract.json';
-import { buildRequest, handler, medicationName, modalOrigin, splitSentences } from './consistency';
+import { buildRequest, handler, modalOrigin, resolveMedications, splitSentences } from './consistency';
 
 const NOTE = scenario.variants[0].note;
 let medplum: MockClient;
+let lookupMock = vi.fn<(url: URL, options?: MedplumRequestOptions) => Promise<unknown>>();
 let patient: WithId<Patient>;
 let encounter: WithId<Encounter>;
 let impression: WithId<ClinicalImpression>;
@@ -82,6 +84,19 @@ async function discharge(
 
 beforeEach(async () => {
   medplum = new MockClient();
+  lookupMock = vi.fn(async (url: URL) => {
+    const code = new URL(url).searchParams.get('code');
+    if (code === '314076') return terminology('lisinopril 10 MG Oral Tablet', 'SCD', ['{316151} 29046']);
+    if (code === '29046') return terminology('lisinopril', 'IN');
+    throw new Error('Unexpected lookup');
+  });
+  const originalGet = medplum.get.bind(medplum);
+  vi.spyOn(medplum, 'get').mockImplementation((url, options) => {
+    const parsed = new URL(url);
+    return parsed.pathname.endsWith('/CodeSystem/$lookup')
+      ? new ReadablePromise(lookupMock(parsed, options))
+      : originalGet(url, options);
+  });
   patient = await medplum.createResource<Patient>({ resourceType: 'Patient', name: [{ family: 'Demo' }] });
   encounter = await medplum.createResource<Encounter>({
     resourceType: 'Encounter',
@@ -194,7 +209,10 @@ describe('consistency Bot', () => {
     });
     const result = await handler(medplum, event(review()));
     expect(result.status).toBe('ok');
-    expect(medplum.download).toHaveBeenCalledWith('Binary/summary');
+    expect(medplum.download).toHaveBeenCalledWith(
+      'Binary/summary',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   test.each([
@@ -457,16 +475,232 @@ describe('consistency Bot', () => {
     expect(result.results[0].sentence_note).toBeUndefined();
     expect(result.results[0].sentence_outside).toBeDefined();
   });
+});
 
-  test('extracts the medication name from the RxNorm display', () => {
+function terminology(name: string, tty: string, ai: string[] = [], related: string[] = []): unknown {
+  return {
+    resourceType: 'Parameters',
+    parameter: [
+      { name: 'display', valueString: name },
+      ...[
+        ['tty', tty],
+        ...ai.map((value) => ['RXN_AI', value]),
+        ...related.map((value) => ['ingredient_of', value]),
+      ].map(([code, value]) => ({
+        name: 'property',
+        part: [
+          { name: 'code', valueCode: code },
+          { name: 'value', [code === 'RXN_AI' ? 'valueString' : 'valueCode']: value },
+        ],
+      })),
+    ],
+  };
+}
+
+function medication(code?: string): import('@medplum/fhirtypes').MedicationRequest {
+  return {
+    resourceType: 'MedicationRequest',
+    status: 'active',
+    intent: 'order',
+    subject: {},
+    medicationCodeableConcept: {
+      coding: [{ system: 'http://www.nlm.nih.gov/research/umls/rxnorm', code, display: 'Wrong 123 display' }],
+    },
+  };
+}
+
+describe('RxNorm ingredient resolution', () => {
+  test('ignores display and deduplicates drug strengths and direct ingredient codes', async () => {
+    lookupMock.mockImplementation(async (url) => {
+      const code = new URL(url).searchParams.get('code');
+      return code === '29046'
+        ? terminology('lisinopril', 'IN')
+        : terminology('wrong display', 'SCD', ['{316151} 29046']);
+    });
     expect(
-      medicationName({
-        resourceType: 'MedicationRequest',
-        status: 'active',
-        intent: 'order',
-        subject: {},
-        medicationCodeableConcept: { coding: [{ display: 'Lisinopril 10 MG Oral Tablet' }] },
-      })
-    ).toBe('lisinopril');
+      await resolveMedications(medplum, [
+        medication('314076'),
+        medication('314076'),
+        medication('314077'),
+        medication('29046'),
+      ])
+    ).toEqual(['lisinopril']);
+    expect(lookupMock).toHaveBeenCalledTimes(3);
+    await resolveMedications(medplum, [medication('29046')]);
+    expect(lookupMock).toHaveBeenCalledTimes(4);
+  });
+
+  test('keeps every combination ingredient in one target and deduplicates by the sorted code set', async () => {
+    lookupMock.mockImplementation(async (url) => {
+      const code = new URL(url).searchParams.get('code');
+      if (code === '2264108') return terminology('fibrinogen, human', 'PIN');
+      if (code === '825006') return terminology('thrombin, human', 'PIN');
+      const ai = ['{2572161} 2264108', '{2572162} 825006'];
+      return terminology('TachoSil 171 MG', 'SBD', code === '1014305' ? ai : ai.reverse());
+    });
+    expect(await resolveMedications(medplum, [medication('1014305'), medication('1001593')])).toEqual([
+      'fibrinogen, human + thrombin, human',
+    ]);
+    expect(lookupMock).toHaveBeenCalledTimes(4);
+  });
+
+  test('sends a combination as one model question and returns one result', async () => {
+    const [request] = await medplum.searchResources('MedicationRequest', {});
+    await medplum.updateResource({
+      ...request,
+      medicationCodeableConcept: medication('1014305').medicationCodeableConcept,
+    });
+    lookupMock.mockImplementation(async (url) => {
+      const code = url.searchParams.get('code');
+      if (code === '2264108') return terminology('fibrinogen, human', 'PIN');
+      if (code === '825006') return terminology('thrombin, human', 'PIN');
+      return terminology('TachoSil', 'SBD', ['{2572161} 2264108', '{2572162} 825006']);
+    });
+    const result = await handler(medplum, event(review()));
+    expect(result).toMatchObject({ status: 'ok', results: [{ medication: 'fibrinogen, human + thrombin, human' }] });
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(body.state.active_medications).toEqual(['fibrinogen, human + thrombin, human']);
+    expect(body.questions.dose_0.instructions).toContain('fibrinogen, human + thrombin, human');
+    expect(body.questions.dose_1).toBeUndefined();
+  });
+
+  test('rejects a paginated medication list rather than checking only its first page', async () => {
+    const requests = await medplum.searchResources('MedicationRequest', {});
+    requests.bundle.link = [{ relation: 'next', url: 'MedicationRequest?_offset=100' }];
+    const originalSearch = medplum.searchResources.bind(medplum);
+    vi.spyOn(medplum, 'searchResources').mockImplementation((type, query, options) =>
+      type === 'MedicationRequest'
+        ? new ReadablePromise(Promise.resolve(requests))
+        : originalSearch(type, query, options)
+    );
+    expect(await handler(medplum, event(review()))).toEqual({
+      status: 'unavailable',
+      reason: 'The active medication list exceeds the review search limit',
+    });
+    expect(lookupMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('caps product codes before making any lookups', async () => {
+    await expect(
+      resolveMedications(
+        medplum,
+        Array.from({ length: 21 }, (_, i) => medication(String(i + 1)))
+      )
+    ).rejects.toThrow('Too many active RxNorm codes');
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  test('caps all lookups even when each product has different ingredients', async () => {
+    lookupMock.mockImplementation(async (url) => {
+      const code = Number(url.searchParams.get('code'));
+      return code > 100
+        ? terminology('ingredient', 'IN')
+        : terminology('product', 'SCD', [`{1} ${code + 100}`, `{2} ${code + 200}`]);
+    });
+    await expect(
+      resolveMedications(
+        medplum,
+        Array.from({ length: 20 }, (_, i) => medication(String(i + 1)))
+      )
+    ).rejects.toThrow('Too many medication terminology lookups');
+    expect(lookupMock.mock.calls.length).toBeLessThanOrEqual(40);
+  });
+
+  test.each(['IN', 'PIN'])('uses %s concept itself, including names containing digits', async (tty) => {
+    lookupMock.mockResolvedValue(terminology('vitamin B12', tty));
+    expect(await resolveMedications(medplum, [medication('29046')])).toEqual(['vitamin B12']);
+    expect(lookupMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['SCDC', 'SCDF'])('resolves verified %s ingredient_of relations', async (tty) => {
+    lookupMock.mockImplementation(async (url) =>
+      new URL(url).searchParams.get('code') === '29046'
+        ? terminology('lisinopril', 'IN')
+        : terminology('lisinopril formulation', tty, [], ['29046'])
+    );
+    expect(await resolveMedications(medplum, [medication('316151')])).toEqual(['lisinopril']);
+  });
+
+  test('distinct ingredient codes with identical names remain distinct targets', async () => {
+    lookupMock.mockResolvedValue(terminology('same name', 'IN'));
+    expect(await resolveMedications(medplum, [medication('1'), medication('2')])).toEqual(['same name', 'same name']);
+  });
+
+  test.each([
+    undefined,
+    { resourceType: 'OperationOutcome' },
+    { resourceType: 'Parameters', parameter: [{ name: 'display', valueString: 42 }] },
+    terminology('drug', 'SCD', ['{316151} broken']),
+    terminology('drug', 'SCD', ['{316151} 29046', 'bad']),
+    terminology('drug', 'SCD', [], ['29046']),
+    terminology('brand', 'BN'),
+    terminology('multiple ingredient', 'MIN'),
+  ])('fails the entire review on malformed or unsupported terminology', async (response) => {
+    lookupMock.mockResolvedValue(response);
+    const result = await handler(medplum, event(review()));
+    expect(result.status).toBe('unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('does not omit uncoded or referenced active medications', async () => {
+    for (const request of [medication(), { ...medication(), medicationReference: { reference: 'Medication/1' } }]) {
+      await medplum.createResource({ ...request, subject: { reference: `Patient/${patient.id}` } });
+      expect((await handler(medplum, event(review()))).status).toBe('unavailable');
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('hides lookup error details and fails if an ingredient lookup fails', async () => {
+    lookupMock.mockImplementation(async (url) => {
+      if (new URL(url).searchParams.get('code') === '314076') return terminology('drug', 'SCD', ['{316151} 29046']);
+      throw new Error(`${NOTE} ts-test`);
+    });
+    expect(await handler(medplum, event(review()))).toEqual({
+      status: 'unavailable',
+      reason: 'Medication terminology is unavailable; retry later',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('rejects a referenced ingredient that is actually a product', async () => {
+    lookupMock.mockResolvedValue(terminology('product', 'SCD', ['{316151} 29046']));
+    await expect(resolveMedications(medplum, [medication('314076')])).rejects.toThrow('invalid response');
+  });
+
+  test('bounds stalled terminology and disables retries', async () => {
+    vi.useFakeTimers();
+    lookupMock.mockImplementation(() => new Promise(() => {}));
+    const pending = handler(medplum, event(review()));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await pending).toEqual({
+      status: 'unavailable',
+      reason: 'Medication terminology did not answer in time; retry later',
+    });
+    expect(lookupMock).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ maxRetries: 0, signal: expect.any(AbortSignal) })
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('bounds stalled chart reads before terminology starts', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(medplum, 'readResource').mockImplementation(() => new ReadablePromise(new Promise(() => {})));
+    const pending = handler(medplum, event(review()));
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(await pending).toEqual({
+      status: 'unavailable',
+      reason: 'Chart preparation did not finish in time; retry later',
+    });
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  test('bounds model execution using the remaining review time', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+    const pending = handler(medplum, event(review()));
+    await vi.advanceTimersByTimeAsync(9000);
+    expect((await pending).status).toBe('unavailable');
   });
 });
