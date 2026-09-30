@@ -58,9 +58,8 @@ export const test = base.extend<Fixtures>({
         .replace(/^-|-$/g, '');
       const finish = await useJevCassette(page, medplum, name, testInfo.title);
       await use();
-      if (testInfo.status === testInfo.expectedStatus) {
-        finish();
-      }
+      // Reports cassette errors even when the test failed; saves a recording only when it passed.
+      finish(testInfo.status === testInfo.expectedStatus);
     },
     { auto: true },
   ],

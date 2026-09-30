@@ -9,7 +9,9 @@ import type { ReviewOutput } from '../bots/consistency.ts';
 // replays them on later runs so tests do not call the Bot or TypeSafe again.
 //
 // - E2E_RECORD=1: requests go to the real Bot; each response is saved to
-//   e2e/cassettes/<test>.json with run-specific ids replaced by placeholders.
+//   e2e/cassettes/<test>.json with run-specific ids replaced by placeholders. A check the
+//   Bot could not complete (a transient model error) is retried once, as a provider would
+//   press Check note again; if it fails again the page gets that answer and the test fails.
 // - Otherwise: each Bot request is answered from the cassette, in order, with the current
 //   run's ids filled in. A missing cassette, an extra or missing call, a note that no
 //   longer matches the recording, or a change to the Bot's questions fails the test and
@@ -98,14 +100,15 @@ function fill(response: Ok, ids: ChartIds): Ok {
  * @param medplum - An authenticated FHIR request context, used to read the current run's ids.
  * @param name - Cassette file name.
  * @param description - Stored in the cassette to say which path it covers.
- * @returns A function that saves (record) or checks full use of (replay) the cassette.
+ * @returns A function that reports cassette errors, then, if the test passed, saves (record) or
+ *   checks full use of (replay) the cassette.
  */
 export async function useJevCassette(
   page: Page,
   medplum: APIRequestContext,
   name: string,
   description: string
-): Promise<() => void> {
+): Promise<(passed: boolean) => void> {
   const path = cassettePath(name);
   const recorded: Cassette | undefined = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
   if (!RECORDING && !recorded) {
@@ -125,12 +128,18 @@ export async function useJevCassette(
     const input = route.request().postDataJSON() as { encounter_id: string };
     const ids = await chartIds(medplum, input.encounter_id);
     if (RECORDING) {
-      const response = await route.fetch();
-      const body = (await response.json()) as ReviewOutput;
+      let response = await route.fetch();
+      let body = (await response.json()) as ReviewOutput;
       if (body.status !== 'ok') {
-        throw new Error(`The Bot answered "${body.reason}" while recording; fix the setup and record again.`);
+        response = await route.fetch();
+        body = (await response.json()) as ReviewOutput;
       }
-      interactions.push({ note: ids.noteText, response: normalize(body) });
+      if (body.status === 'ok') {
+        interactions.push({ note: ids.noteText, response: normalize(body) });
+      } else {
+        failures.push(`The Bot answered "${body.reason}" twice while recording; fix the setup and record again.`);
+      }
+      // Always answer: an aborted request makes MedplumClient retry it, which runs the Bot again.
       await route.fulfill({ response, json: body });
       return;
     }
@@ -146,6 +155,8 @@ export async function useJevCassette(
     await route.fulfill({ json: fill(next.response, ids) });
   };
   // A throw inside a route handler would leave the request hanging; abort it and fail at the end.
+  // Once the Bot has answered, the handler no longer throws, so only a failed lookup or a failed
+  // request is aborted.
   await page.route(BOT_EXECUTE, (route) =>
     handle(route).catch(async (err: Error) => {
       failures.push(err.message);
@@ -153,9 +164,12 @@ export async function useJevCassette(
     })
   );
 
-  return () => {
+  return (passed: boolean) => {
     if (failures.length) {
       throw new Error(failures.join('\n'));
+    }
+    if (!passed) {
+      return;
     }
     if (RECORDING) {
       mkdirSync(CASSETTE_DIR, { recursive: true });
