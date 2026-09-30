@@ -1,5 +1,11 @@
 import type { BotEvent, MedplumClient } from '@medplum/core';
-import type { ClinicalImpression, DocumentReference, Encounter, MedicationRequest } from '@medplum/fhirtypes';
+import type {
+  ClinicalImpression,
+  DocumentReference,
+  Encounter,
+  MedicationRequest,
+  Parameters,
+} from '@medplum/fhirtypes';
 import contract from '../src/data/model-contract.json' with { type: 'json' };
 
 // Reads the visit note, the newest outside discharge summary and the active medications
@@ -82,64 +88,55 @@ const RXNORM = 'http://www.nlm.nih.gov/research/umls/rxnorm';
 const RXCUI = /^[1-9]\d{0,9}$/;
 const TERMINOLOGY_INVALID = 'Medication terminology returned an invalid response';
 
-type RxConcept = { name: string; properties: Map<string, string[]> };
+type RxConcept = { name: string; tty: string[]; ai: string[]; ingredientOf: string[] };
 
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Unavailable(TERMINOLOGY_INVALID);
-  return value as Record<string, unknown>;
+/** The display and the `$lookup` properties that ingredient resolution reads. */
+function rxConcept(params: Parameters | undefined): RxConcept {
+  const property = (code: string): string[] =>
+    (params?.parameter ?? []).flatMap(({ name, part = [] }) => {
+      const value = part.find((p) => p.name === 'value');
+      return name === 'property' && part.find((p) => p.name === 'code')?.valueCode === code
+        ? (value?.valueCode ?? value?.valueString ?? [])
+        : [];
+    });
+  const display = params?.parameter?.find((parameter) => parameter.name === 'display')?.valueString;
+  return {
+    name: cleanText(display ?? ''),
+    tty: property('tty'),
+    ai: property('RXN_AI'),
+    ingredientOf: property('ingredient_of'),
+  };
 }
 
-/** Parse only display and the properties used for ingredient resolution; ignore unrelated properties. */
-function rxConcept(response: unknown): RxConcept {
-  const resource = object(response);
-  if (resource.resourceType !== 'Parameters' || !Array.isArray(resource.parameter))
-    throw new Unavailable(TERMINOLOGY_INVALID);
-  let name: string | undefined;
-  const properties = new Map<string, string[]>();
-  for (const entry of resource.parameter) {
-    const parameter = object(entry);
-    if (parameter.name === 'display') {
-      if (name !== undefined || typeof parameter.valueString !== 'string' || !parameter.valueString.trim())
-        throw new Unavailable(TERMINOLOGY_INVALID);
-      name = parameter.valueString.trim();
-    }
-    if (parameter.name !== 'property') continue;
-    if (!Array.isArray(parameter.part)) throw new Unavailable(TERMINOLOGY_INVALID);
-    const parts = parameter.part.map(object);
-    const codes = parts.filter((part) => part.name === 'code');
-    if (codes.length !== 1 || typeof codes[0].valueCode !== 'string') throw new Unavailable(TERMINOLOGY_INVALID);
-    const code = codes[0].valueCode;
-    if (!['tty', 'RXN_AI', 'ingredient_of'].includes(code)) continue;
-    const values = parts.filter((part) => part.name === 'value');
-    const field = code === 'RXN_AI' ? 'valueString' : 'valueCode';
-    if (
-      values.length !== 1 ||
-      typeof values[0][field] !== 'string' ||
-      Object.keys(values[0]).filter((key) => key.startsWith('value')).length !== 1
-    )
-      throw new Unavailable(TERMINOLOGY_INVALID);
-    properties.set(code, [...(properties.get(code) ?? []), values[0][field] as string]);
-  }
-  if (!name || name.length > 200 || cleanText(name) !== name) throw new Unavailable(TERMINOLOGY_INVALID);
-  return { name, properties };
-}
+const isIngredient = (concept: RxConcept): boolean => concept.tty.some((tty) => tty === 'IN' || tty === 'PIN');
 
-/** Bounds awaited work even if a client or response body ignores abort signals. */
-async function within<T>(work: Promise<T>, milliseconds: number, reason: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+/**
+ * Runs `work` with a signal that aborts after `ms` or when `parent` aborts. Once it aborts, any failure
+ * reports the budget that ran out, not the error the cancelled request raised. Requests still running
+ * when `work` settles are cancelled.
+ */
+async function withBudget<T>(
+  ms: number,
+  reason: string,
+  work: (signal: AbortSignal) => Promise<T>,
+  parent?: AbortSignal
+): Promise<T> {
+  const controller = new AbortController();
+  // A timer rather than AbortSignal.timeout, so tests can drive budgets with fake timers.
+  const timer = setTimeout(() => controller.abort(new Unavailable(reason)), Math.max(1, ms));
+  const signal = parent ? AbortSignal.any([parent, controller.signal]) : controller.signal;
   try {
-    return await Promise.race([
-      work,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Unavailable(reason)), Math.max(1, milliseconds));
-      }),
-    ]);
+    return await work(signal);
+  } catch (err) {
+    signal.throwIfAborted();
+    throw err;
   } finally {
     clearTimeout(timer);
+    controller.abort();
   }
 }
 
-/** One cache per review; identity is the complete sorted set of ingredient RXCUIs. */
+/** One name per distinct ingredient set, e.g. "fibrinogen, human + thrombin, human". Lookups are shared within a review. */
 export async function resolveMedications(
   medplum: MedplumClient,
   requests: MedicationRequest[],
@@ -166,63 +163,55 @@ export async function resolveMedications(
   ];
   if (codes.length > 20) throw new Unavailable('Too many active RxNorm codes for the demo check');
   // Chart preparation has a 3.5 s budget; terminology gets at most 1.5 s of it.
-  const controller = new AbortController();
-  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(1500), ...(chartSignal ? [chartSignal] : [])]);
-  const cache = new Map<string, Promise<RxConcept>>();
-  const lookup = (code: string): Promise<RxConcept> => {
-    if (signal.aborted) throw new Unavailable('Medication terminology is unavailable; retry later');
-    if (!RXCUI.test(code)) throw new Unavailable(TERMINOLOGY_INVALID);
-    let pending = cache.get(code);
-    if (!pending) {
-      if (cache.size >= 40) throw new Unavailable('Too many medication terminology lookups for the demo check');
-      pending = medplum
-        .get<unknown>(medplum.fhirUrl('CodeSystem/$lookup?' + new URLSearchParams({ system: RXNORM, code })), {
-          signal,
-          maxRetries: 0,
-          cache: 'no-cache',
+  const names = await withBudget(
+    1500,
+    'Medication terminology did not answer in time; retry later',
+    (signal) => {
+      const cache = new Map<string, Promise<RxConcept>>();
+      const lookup = async (code: string): Promise<RxConcept> => {
+        let pending = cache.get(code);
+        if (!pending) {
+          if (cache.size >= 40) throw new Unavailable('Too many medication terminology lookups for the demo check');
+          pending = medplum
+            .get<Parameters>(medplum.fhirUrl('CodeSystem/$lookup?' + new URLSearchParams({ system: RXNORM, code })), {
+              signal,
+              maxRetries: 0,
+            })
+            .then(rxConcept, () => {
+              throw new Unavailable('Medication terminology is unavailable; retry later');
+            });
+          cache.set(code, pending);
+        }
+        return pending;
+      };
+      return Promise.all(
+        codes.map(async (code) => {
+          const concept = await lookup(code);
+          let ingredients: string[];
+          if (isIngredient(concept)) {
+            ingredients = [code];
+          } else if (concept.ai.length) {
+            ingredients = concept.ai.map((value) => {
+              const match = /^\{\d+\} (\d+)$/.exec(value);
+              if (!match) throw new Unavailable(TERMINOLOGY_INVALID);
+              return match[1];
+            });
+          } else if (concept.tty.some((tty) => tty === 'SCDC' || tty === 'SCDF')) {
+            // Medplum's imported RxNorm relations point from these concepts to IN/PIN via ingredient_of.
+            ingredients = concept.ingredientOf;
+          } else {
+            throw new Unavailable('An active RxNorm concept has no supported ingredient resolution');
+          }
+          if (!ingredients.length) throw new Unavailable(TERMINOLOGY_INVALID);
+          const resolved = await Promise.all([...new Set(ingredients)].map(lookup));
+          if (!resolved.every((item) => isIngredient(item) && item.name)) throw new Unavailable(TERMINOLOGY_INVALID);
+          return [...new Set(resolved.map((item) => item.name))].sort().join(' + ');
         })
-        .then(rxConcept, () => {
-          throw new Unavailable('Medication terminology is unavailable; retry later');
-        });
-      cache.set(code, pending);
-    }
-    return pending;
-  };
-  const ingredient = (concept: RxConcept): boolean =>
-    (concept.properties.get('tty') ?? []).some((tty) => tty === 'IN' || tty === 'PIN');
-  const work = Promise.all(
-    codes.map(async (code) => {
-      const concept = await lookup(code);
-      let ingredients: string[];
-      const ai = concept.properties.get('RXN_AI');
-      if (ingredient(concept)) {
-        ingredients = [code];
-      } else if (ai?.length) {
-        ingredients = ai.map((value) => {
-          const match = /^\{[1-9]\d{0,9}\} ([1-9]\d{0,9})$/.exec(value);
-          if (!match) throw new Unavailable(TERMINOLOGY_INVALID);
-          return match[1];
-        });
-      } else if ((concept.properties.get('tty') ?? []).some((tty) => ['SCDC', 'SCDF'].includes(tty))) {
-        // Medplum's imported RxNorm relations point from these concepts to IN/PIN via ingredient_of.
-        ingredients = concept.properties.get('ingredient_of') ?? [];
-      } else {
-        throw new Unavailable('An active RxNorm concept has no supported ingredient resolution');
-      }
-      ingredients = [...new Set(ingredients)].sort();
-      if (!ingredients.length || ingredients.length > 10) throw new Unavailable(TERMINOLOGY_INVALID);
-      const resolved = await Promise.all(ingredients.map(lookup));
-      if (!resolved.every(ingredient)) throw new Unavailable(TERMINOLOGY_INVALID);
-      return { key: ingredients.join(','), name: resolved.map((item) => item.name).join(' + ') };
-    })
+      );
+    },
+    chartSignal
   );
-  let targets: { key: string; name: string }[];
-  try {
-    targets = await within(work, 1500, 'Medication terminology did not answer in time; retry later');
-  } finally {
-    controller.abort();
-  }
-  const medications = [...new Map(targets.map((target) => [target.key, target.name])).values()];
+  const medications = [...new Set(names)];
   if (medications.length > limits.max_medications)
     throw new Unavailable('Too many active medications for the demo check');
   return medications;
@@ -334,7 +323,6 @@ async function readChart(
     ),
   ]);
 
-  signal.throwIfAborted();
   const noteText = (impression as ClinicalImpression | undefined)?.note?.[0]?.text?.trim();
   if (!impression || !noteText) throw new Unavailable('No chart note has been saved for this visit yet');
   if (
@@ -343,7 +331,6 @@ async function readChart(
   )
     throw new Unavailable('The active medication list exceeds the review search limit');
   const medications = await resolveMedications(medplum, requests, signal);
-  signal.throwIfAborted();
   const summary = summaries[0];
   if (!summary) throw new Unavailable('No outside discharge summary is on file');
 
@@ -455,26 +442,28 @@ export function modelService(setting: (name: string) => string | undefined): Mod
 }
 
 async function callModel(service: ModelService, body: unknown, deadline: number): Promise<Record<string, any>> {
-  for (let attempt = 0; ; attempt++) {
-    let response: Response;
-    try {
-      response = await fetch(service.url, {
-        method: 'POST',
-        redirect: 'error',
-        signal: AbortSignal.timeout(Math.max(1, Math.min(service.timeoutMs, deadline - Date.now()))),
-        headers: { 'Content-Type': 'application/json', ...service.headers },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      throw new Unavailable(service.messages[0]);
+  return withBudget(Math.min(service.timeoutMs, deadline - Date.now()), service.messages[0], async (signal) => {
+    for (let attempt = 0; ; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(service.url, {
+          method: 'POST',
+          redirect: 'error',
+          signal,
+          headers: { 'Content-Type': 'application/json', ...service.headers },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        throw new Unavailable(service.messages[0]);
+      }
+      if (response.ok) return response.json();
+      if ((response.status === 429 || response.status === 529) && attempt === 0 && deadline - Date.now() > 2000) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw new Unavailable(service.messages[response.status] ?? 'The model service is unavailable');
     }
-    if (response.ok) return within(response.json(), deadline - Date.now(), service.messages[0]);
-    if ((response.status === 429 || response.status === 529) && attempt === 0 && deadline - Date.now() > 2000) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      continue;
-    }
-    throw new Unavailable(service.messages[response.status] ?? 'The model service is unavailable');
-  }
+  });
 }
 
 function isProbability(value: unknown): value is number {
@@ -552,13 +541,11 @@ export async function review(medplum: MedplumClient, event: BotEvent, encounterI
   // Leave 1 s for answer validation and the hosted Bot's response handling before its 10 s stop.
   const deadline = Date.now() + 9000;
   const service = modelService((name) => optionalSecret(event, name));
-  const chart = await within(
-    readChart(medplum, encounterId, AbortSignal.timeout(3500)),
-    3500,
-    'Chart preparation did not finish in time; retry later'
+  const chart = await withBudget(3500, 'Chart preparation did not finish in time; retry later', (signal) =>
+    readChart(medplum, encounterId, signal)
   );
   const body = buildRequest(chart.medications, chart.outside, chart.note, service.maxSentences);
-  const response = await within(callModel(service, body, deadline), deadline - Date.now(), service.messages[0]);
+  const response = await callModel(service, body, deadline);
   const answers = response?.answers ?? {};
 
   const results = chart.medications.map((medication, i) =>

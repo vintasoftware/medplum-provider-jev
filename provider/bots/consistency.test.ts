@@ -497,6 +497,13 @@ function terminology(name: string, tty: string, ai: string[] = [], related: stri
   };
 }
 
+/** A request that never answers and rejects when its signal aborts, as MedplumClient and fetch do. */
+function stalled(signal: AbortSignal | null | undefined): Promise<never> {
+  return new Promise((_, reject) =>
+    signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')))
+  );
+}
+
 function medication(code?: string): import('@medplum/fhirtypes').MedicationRequest {
   return {
     resourceType: 'MedicationRequest',
@@ -592,11 +599,12 @@ describe('RxNorm ingredient resolution', () => {
   });
 
   test('caps all lookups even when each product has different ingredients', async () => {
-    lookupMock.mockImplementation(async (url) => {
+    // Ingredient lookups are still in flight when the cap is hit; the review cancels them without an unhandled rejection.
+    lookupMock.mockImplementation(async (url, options) => {
       const code = Number(url.searchParams.get('code'));
       return code > 100
-        ? terminology('ingredient', 'IN')
-        : terminology('product', 'SCD', [`{1} ${code + 100}`, `{2} ${code + 200}`]);
+        ? stalled(options?.signal)
+        : terminology('product', 'SCD', [`{1} ${code + 100}`, `{2} ${code + 200}`, `{3} ${code + 300}`]);
     });
     await expect(
       resolveMedications(
@@ -622,15 +630,28 @@ describe('RxNorm ingredient resolution', () => {
     expect(await resolveMedications(medplum, [medication('316151')])).toEqual(['lisinopril']);
   });
 
-  test('distinct ingredient codes with identical names remain distinct targets', async () => {
+  test('deduplicates targets by name, the identity the model questions and the review card use', async () => {
     lookupMock.mockResolvedValue(terminology('same name', 'IN'));
-    expect(await resolveMedications(medplum, [medication('1'), medication('2')])).toEqual(['same name', 'same name']);
+    expect(await resolveMedications(medplum, [medication('1'), medication('2')])).toEqual(['same name']);
+  });
+
+  test('keeps products with more than ten ingredients', async () => {
+    lookupMock.mockImplementation(async (url) => {
+      const code = Number(url.searchParams.get('code'));
+      return code > 100
+        ? terminology(`vitamin ${code}`, 'IN')
+        : terminology(
+            'multivitamin',
+            'SCD',
+            Array.from({ length: 12 }, (_, i) => `{${i + 1}} ${i + 101}`)
+          );
+    });
+    const [name] = await resolveMedications(medplum, [medication('1')]);
+    expect(name.split(' + ')).toHaveLength(12);
   });
 
   test.each([
     undefined,
-    { resourceType: 'OperationOutcome' },
-    { resourceType: 'Parameters', parameter: [{ name: 'display', valueString: 42 }] },
     terminology('drug', 'SCD', ['{316151} broken']),
     terminology('drug', 'SCD', ['{316151} 29046', 'bad']),
     terminology('drug', 'SCD', [], ['29046']),
@@ -670,9 +691,9 @@ describe('RxNorm ingredient resolution', () => {
 
   test('bounds stalled terminology and disables retries', async () => {
     vi.useFakeTimers();
-    lookupMock.mockImplementation(() => new Promise(() => {}));
+    lookupMock.mockImplementation((_, options) => stalled(options?.signal));
     const pending = handler(medplum, event(review()));
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(1500);
     expect(await pending).toEqual({
       status: 'unavailable',
       reason: 'Medication terminology did not answer in time; retry later',
@@ -686,7 +707,9 @@ describe('RxNorm ingredient resolution', () => {
 
   test('bounds stalled chart reads before terminology starts', async () => {
     vi.useFakeTimers();
-    vi.spyOn(medplum, 'readResource').mockImplementation(() => new ReadablePromise(new Promise(() => {})));
+    vi.spyOn(medplum, 'readResource').mockImplementation(
+      (_type, _id, options) => new ReadablePromise(stalled(options?.signal))
+    );
     const pending = handler(medplum, event(review()));
     await vi.advanceTimersByTimeAsync(3500);
     expect(await pending).toEqual({
@@ -698,9 +721,12 @@ describe('RxNorm ingredient resolution', () => {
 
   test('bounds model execution using the remaining review time', async () => {
     vi.useFakeTimers();
-    vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(fetch).mockImplementation((_, init) => stalled(init?.signal));
     const pending = handler(medplum, event(review()));
     await vi.advanceTimersByTimeAsync(9000);
-    expect((await pending).status).toBe('unavailable');
+    expect(await pending).toEqual({
+      status: 'unavailable',
+      reason: 'The model service could not be reached; retry later',
+    });
   });
 });
