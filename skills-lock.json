@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "thermo-nuclear-review-loop": {
+      "source": "vintasoftware/pr-review-canvas",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/thermo-nuclear-review-loop/SKILL.md",
+      "computedHash": "ae0b551a81157b705a5d4d40f1ac1b6791604ed74af7dae79dbcf241cd0a58d2"
+    }
+  }
+}
