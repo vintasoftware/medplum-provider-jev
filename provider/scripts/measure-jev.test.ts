@@ -2,10 +2,39 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
-import { buildRequest, splitSentences } from '../bots/consistency';
+import type { ModelService } from '../bots/consistency';
+import { buildRequest, modelService, splitSentences } from '../bots/consistency';
 import contract from '../src/data/model-contract.json';
 import type { MeasurementCase } from './measure-jev';
 import { measure, measurementCases } from './measure-jev';
+
+const typesafe = (key: string): ModelService =>
+  modelService((name) => ({ CONSISTENCY_BACKEND: 'typesafe', TYPESAFE_API_KEY: key })[name]);
+const modal = (url: string, key: string, secret: string): ModelService =>
+  modelService(
+    (name) =>
+      ({
+        CONSISTENCY_BACKEND: 'modal',
+        CONSISTENCY_MODEL_URL: url,
+        CONSISTENCY_MODAL_KEY: key,
+        CONSISTENCY_MODAL_SECRET: secret,
+      })[name]
+  );
+
+/** A highlight answer over `text`'s sentences: 0.9 on the picked option. */
+function sentenceAnswer(text: string, picked: number | 'none'): unknown {
+  const count = splitSentences(text).length;
+  const option = picked === 'none' ? 'none' : `s${picked + 1}`;
+  return {
+    type: 'choice',
+    choice: option,
+    probabilities: {
+      ...Object.fromEntries(Array.from({ length: count }, (_, n) => [`s${n + 1}`, 0.1 / count])),
+      none: 0.1 / count,
+      [option]: 0.9,
+    },
+  };
+}
 
 function answer(item: MeasurementCase, pickNote: boolean): unknown {
   const noteSentences = splitSentences(item.note.text);
@@ -21,7 +50,7 @@ function answer(item: MeasurementCase, pickNote: boolean): unknown {
         confidence: 0.9,
         probabilities: { agreement: 0.9, potential_conflict: 0.05, insufficient_information: 0.05 },
       },
-      sentence_visit_note_0: { type: 'choice', choice: pickNote && idx >= 0 ? `s${idx + 1}` : 'none' },
+      sentence_visit_note_0: sentenceAnswer(item.note.text, pickNote && idx >= 0 ? idx : 'none'),
     },
   };
 }
@@ -65,14 +94,14 @@ describe('measure-jev', () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(init.body as string);
       const item = cases.find((c) => c.note.text === body.state.visit_note.text) as MeasurementCase;
-      expect(body).toEqual(buildRequest([item.medication], item.outside, item.note));
+      expect(body).toEqual(buildRequest([item.medication], item.outside, item.note, contract.limits.max_sentences));
       return new Response(JSON.stringify(answer(item, true)));
     });
     const file = outFile();
     const log: string[] = [];
     const ok = await measure({
       rounds: 1,
-      apiKey: 'ts-secret',
+      service: typesafe('ts-secret'),
       outFile: file,
       cases,
       fetch: fetchMock as any,
@@ -98,7 +127,7 @@ describe('measure-jev', () => {
     const file = outFile();
     const ok = await measure({
       rounds: 1,
-      apiKey: 'k',
+      service: typesafe('k'),
       outFile: file,
       cases,
       fetch: fetchMock as any,
@@ -117,7 +146,7 @@ describe('measure-jev', () => {
     const file = outFile();
     const ok = await measure({
       rounds: 1,
-      apiKey: 'k',
+      service: typesafe('k'),
       outFile: file,
       cases,
       fetch: (async () => new Response(JSON.stringify(bad))) as any,
@@ -125,5 +154,47 @@ describe('measure-jev', () => {
     });
     expect(ok).toBe(0);
     expect(JSON.parse(readFileSync(file, 'utf8')).error).toBe('Request or response validation failed');
+  });
+
+  test('sends the same request to the Modal Server with its proxy token', async () => {
+    const [item] = measurementCases();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer(item, true))));
+    await measure({
+      rounds: 1,
+      service: modal('https://example.us-east.modal.direct/', 'wk-a', 'ws-b'),
+      outFile: outFile(),
+      cases: [item],
+      fetch: fetchMock as any,
+      log: () => undefined,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://example.us-east.modal.direct/v1/systemone');
+    expect(init.headers).toMatchObject({ 'Modal-Key': 'wk-a', 'Modal-Secret': 'ws-b' });
+    expect(JSON.parse(init.body as string)).toEqual(buildRequest([item.medication], item.outside, item.note, 19));
+  });
+
+  test('applies the no-dose rule for both backends and records the model label', async () => {
+    const item = measurementCases().find((c) => c.id === 'scenario-no-dose') as MeasurementCase;
+    const body = JSON.stringify(answer(item, false));
+    const rows = [];
+    for (const service of [modal('https://example.modal.run', 'k', 's'), typesafe('k')]) {
+      const file = outFile();
+      await measure({
+        rounds: 1,
+        service,
+        outFile: file,
+        cases: [item],
+        fetch: (async () => new Response(body)) as any,
+        log: () => undefined,
+      });
+      rows.push(JSON.parse(readFileSync(file, 'utf8')));
+    }
+    expect(rows[0].result).toMatchObject({
+      choice: 'insufficient_information',
+      model_choice: 'agreement',
+      label_rule: 'no_dose_sentence',
+    });
+    expect(rows[0].matches_reference).toBe(true);
+    expect(rows[1].result).toEqual(rows[0].result);
   });
 });

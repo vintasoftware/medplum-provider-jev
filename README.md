@@ -11,7 +11,7 @@ Synthetic data only. One synthetic run is not clinical validation. Validate it w
 ## More info
 
 - [ARTICLE.md](ARTICLE.md): why this workflow, how it works, model choices, results and limits.
-- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Decider model on a private Modal GPU instead of hosted Jev for proper HIPAA compliance.
+- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Jebadiah 27B model on a private Modal GPU instead of hosted Jev for proper HIPAA compliance.
 
 ## Quick start
 
@@ -92,7 +92,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Rewrite `provider/.env.local` from the root `.env` | `npm --prefix provider run configure` |
 | Unit tests | `npm --prefix provider test -- bots src/components/encounter src/pages/guided-demo scripts` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
-| Measure hosted Jev on the authored cases and scenario notes | `npm --prefix provider run measure` |
+| Measure hosted Jev on the authored cases and scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
 | Bot artifact smoke test | `npm --prefix provider run test:bot-bundle` |
 | Production build | `npm --prefix provider run build` |
 
@@ -173,7 +173,7 @@ Add `TYPESAFE_API_KEY` and `CONSISTENCY_BACKEND=typesafe` as ordinary string sec
 | Card: The model service rejected the project credentials | Replace `TYPESAFE_API_KEY` in Project Admin → Secrets |
 | Card: No chart note has been saved for this visit yet | Type the note, then press Check note |
 | Card: No outside discharge summary is on file | Use Start scenario; the check needs a current LOINC 18842-5 DocumentReference with `text/plain` content |
-| Card: The self-hosted Modal backend does not accept visit text yet | Set `CONSISTENCY_BACKEND` to `typesafe`; see [SELF-HOSTING.md](SELF-HOSTING.md) |
+| Card: The self-hosted model … | `CONSISTENCY_BACKEND` is `modal`; see the troubleshooting table in [SELF-HOSTING.md](SELF-HOSTING.md) |
 | e2e: `recorded with different Bot questions` | Re-record: `E2E_RECORD=1 npm --prefix provider run test:e2e` |
 
 ## Privacy

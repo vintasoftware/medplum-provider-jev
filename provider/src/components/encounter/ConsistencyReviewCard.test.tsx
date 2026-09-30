@@ -169,6 +169,31 @@ describe('ConsistencyReviewCard', () => {
     expect(JSON.stringify(issues[0])).not.toContain('lisinopril 10 mg daily');
   });
 
+  test('explains a label set by the no-dose rule and keeps the model scores', async () => {
+    const [result] = (botResult() as Extract<ReviewOutput, { status: 'ok' }>).results;
+    vi.spyOn(medplum, 'executeBot').mockResolvedValue(
+      botResult({
+        results: [
+          {
+            ...result,
+            choice: 'insufficient_information',
+            probabilities: { agreement: 0.78, potential_conflict: 0.02, insufficient_information: 0.2 },
+            sentence_note: undefined,
+            label_rule: 'no_dose_sentence',
+          },
+        ],
+      })
+    );
+    const { rerender } = setup();
+    rerender({ requestSeq: 1 });
+    await screen.findByText('Insufficient information', BADGE);
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByText(/Label set by rule/)).toBeInTheDocument();
+    expect(screen.getByText('78.0%')).toBeInTheDocument();
+    const [issue] = await medplum.searchResources('DetectedIssue', { patient: `Patient/${patient.id}` });
+    expect(issue.detail).toContain('label set by rule');
+  });
+
   test('loads the newest stored check without calling the Bot', async () => {
     const execute = vi.spyOn(medplum, 'executeBot');
     vi.spyOn(medplum, 'executeBot').mockResolvedValueOnce(botResult());

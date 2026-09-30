@@ -1,12 +1,13 @@
-# Self-hosting the decision model: Decider on Modal
+# Self-hosting the decision model: Jebadiah 27B on Modal
 
-Instead of TypeSafe's hosted Jev, run the open, Apache-2.0 **Mapika/decider-35b-a3b-nvfp4** checkpoint on a private Modal GPU Server. This is the path to evaluate when patient data and contractual control matter: Modal documents an Enterprise BAA, and the model and weights stay in your account. [ARTICLE.md](ARTICLE.md) explains the model choice and the HIPAA reasoning.
+Instead of TypeSafe's hosted Jev, run the open, Apache-2.0 **frontier-infra/jebadiah-27b** checkpoint on a private Modal GPU Server. This is the path to evaluate when patient data and contractual control matter: Modal documents an Enterprise BAA, and the model and weights stay in your account. [ARTICLE.md](ARTICLE.md) explains the model choice and the HIPAA reasoning.
 
-**Status.** The endpoint is staged, deployed and produced a verified prediction (below). It accepts only one of nine authored case ids (`demo/cases.py`), not visit text, so it **cannot run the guided demo yet**: with `CONSISTENCY_BACKEND=modal` the Bot answers "does not accept visit text yet". See [Next step: a text contract](#next-step-a-text-contract).
+**Status.** The Server runs Jebadiah's own server, which takes the same `POST /v1/systemone` request the Bot sends to hosted Jev, so the guided demo runs on it with `CONSISTENCY_BACKEND=modal` ([step 5](#5-run-the-guided-demo-on-it)). After an idle period the first check waits on a [cold start of usually 3–4 minutes](#6-cold-starts-and-warm-up).
 
 ## What you need
 
 - A Modal account with a payment method, and `modal setup` done locally.
+- A Hugging Face read token for staging: anonymous downloads from Modal get rate limited.
 - Python 3.12:
 
   ```bash
@@ -14,34 +15,28 @@ Instead of TypeSafe's hosted Jev, run the open, Apache-2.0 **Mapika/decider-35b-
   python -m pytest -q
   ```
 
-- No local GPU and no paid Hugging Face account; the checkpoint is public.
-
 | Artifact | Pin |
 | --- | --- |
-| Model | `Mapika/decider-35b-a3b-nvfp4` |
-| Revision | `798555c06e419c4638c9ebd06c78ed8b5e92c868` |
-| Native prompt helper SHA-256 | `5a42134cf470c566e34ac38fb10e63851c21a4bb739475eef797849bcfe460a3` |
-| vLLM | 0.29.0, image `vllm/vllm-openai@sha256:082ca6f035279109041ffd3fe0695cb568b29bc580b35c4f297a66a08b216c1b` (CUDA 13.0.2) |
-| Modal SDK | 1.5.5 |
-| GPU | One RTX PRO 6000 Blackwell, 96 GB |
+| Model | [`frontier-infra/jebadiah-27b`](https://huggingface.co/frontier-infra/jebadiah-27b), a Qwen3.8-27B fine-tune, 56 GB of BF16 weights |
+| Revision | `3dd6f22cd54d83c5f665b1ad2f6b7183e8f96bed` |
+| Server | [`getainode/jebadiah`](https://github.com/getainode/jebadiah) at `cc904344061e4ee71d2cb8297eafd2ce1c798f99`, installed with `uv sync --frozen` |
+| GPU | One A100 80 GB; the model uses 53.4 GB |
 
-The pins live in `demo/config.py`. The ~19.6 GB of weights are not the VRAM requirement; the serving limit is 4,096 tokens. B300 needs a separately verified CUDA 13.1 image: changing only the GPU name is not a fallback.
+The pins live in `demo/modal_app.py`. The server is third-party code that sees the documents: review its diff before changing `SERVER_COMMIT`.
 
 ## 1. Stage the weights
 
 ```bash
-modal run -m demo.modal_app
+HUGGING_FACE_TOKEN=hf_... modal run -m demo.modal_app
 ```
 
-A CPU function in the US downloads the pinned revision into the v2 Volume `healthcare-decider-weights-v2`, verifies every file against its Git blob or LFS SHA-256, checks the prompt-helper hash, and commits the Volume only after verification. A successful run returns:
+A CPU function in the US downloads the pinned revision into the v2 Volume `healthcare-jebadiah-weights-v2`, verifies every file against its Git blob or LFS SHA-256, and commits the Volume only after verification. A successful run returns:
 
 ```text
-{'revision': '798555c06e419c4638c9ebd06c78ed8b5e92c868', 'verified_files': 29}
+{'revision': '3dd6f22cd54d83c5f665b1ad2f6b7183e8f96bed', 'verified_files': 67}
 ```
 
-`Stopping app - local entrypoint completed` afterwards is normal, and an unauthenticated Hugging Face warning is harmless. Staging does not load the model on a GPU. Skip this step if it already succeeded for this revision.
-
-To check the prompt rendering without weights, `python -m demo.verify_tokenizer` renders all nine prompts with the pinned tokenizer (167–195 tokens each, answer token ids 32, 33 and 34) and writes `artifacts/tokenizer-check.json`.
+The token reaches only the staging function. Skip this step if it already succeeded for this revision.
 
 ## 2. Deploy
 
@@ -50,9 +45,9 @@ modal deploy -m demo.modal_app
 python -c 'import modal; print(modal.Server.from_name("healthcare-consistency", "Inference").get_url())'
 ```
 
-The app defines a private `Inference` Server that runs in the US with US-east routing. It loads the model before opening its port, handles one request at a time (rejecting concurrent ones with 429), scales to zero after five idle minutes and keeps its URL. Memory snapshots are off, weights are mounted read-only and Hub access is disabled. Use the printed URLs, not `modal.com/apps/...` dashboard links or temporary `-dev` endpoints; regional URLs can end in `.modal.direct`.
+Deploy without `HUGGING_FACE_TOKEN` set, so the app carries no token. The private `Inference` Server runs in the US with US-east routing, scales to zero after five idle minutes and keeps its URL. Memory snapshots are off, weights are mounted read-only and Hub access is disabled. It refuses to start unless the staged revision was verified, and stops at once if the model fails to load. Use the printed URL, not a `modal.com/apps/...` dashboard link; regional URLs can end in `.modal.direct`.
 
-The inference server builds Decider's native prompt with fixed option order, reads the three allowed option-token logits, applies the checkpoint temperature (1.08) once, and returns a normalized distribution. It rejects overlong contexts instead of letting the helper truncate evidence. Expected labels are never model input. [Reference readout](https://github.com/Mapika/decider/blob/main/moe/vllm_check.py).
+The server answers for `jev-latest` and reports its weights path, which names the pinned revision, as the model (the card shows `model /models/3dd6f22…`). It reads each question's option logits in one pass and applies the checkpoint's per-question-type temperatures. It runs one request at a time and queues the rest. It refuses a question with more than 20 options, so on `modal` the Bot skips the highlight for a document over 19 sentences and still checks the label.
 
 ## 3. Authenticate callers
 
@@ -62,42 +57,73 @@ Store the values as ordinary **string** secrets in Medplum Project Admin → Sec
 
 | Name | Value |
 | --- | --- |
-| `CONSISTENCY_MODEL_URL` | The Inference HTTPS origin only: no `/check`, quotes, backticks or `NAME=` prefix |
+| `CONSISTENCY_MODEL_URL` | The Inference HTTPS origin only: no path, quotes, backticks or `NAME=` prefix |
 | `CONSISTENCY_MODAL_KEY` | Token ID, including `wk-` |
 | `CONSISTENCY_MODAL_SECRET` | Token secret, including `ws-` |
 
 Never put them in frontend settings or logs; `npm --prefix provider run configure` never copies them.
 
-## 4. Verify and measure
+## 4. Measure
 
 ```bash
-python -m demo.measure --rounds 1        # up to 5 rounds per deliberate run
+npm --prefix provider run measure -- --backend modal
 ```
 
-It calls the endpoint by case id for all nine authored cases, validates the pinned model, revision and fixture digest, and writes `artifacts/gpu-run-<UTC>.jsonl` with each choice, the three scores, timing and the authored reference (marked as not clinician-validated). It stops at the first failure and never substitutes a reference label for a model answer.
+It sends the Bot's exact requests for the five authored dose cases and the four scenario notes, and writes `artifacts/modal-run-<UTC>.jsonl` with each label, the scores, the highlighted sentences and whether they hit the expected ones. It stops at the first 503: warm the Server first ([step 6](#6-cold-starts-and-warm-up)).
 
-The first request after scale-down can return **503** while the GPU starts (`0 live (+1 cold-starting)` in Modal). Open the **Inference** container logs; wait for model loading and the server listening on port 8000, then retry. Exceptions, repeated restarts or no GPU capacity need investigation; 503 alone does not prove a normal cold start.
+**Result.** On September 30, 2026, on the A100 (`artifacts/modal-run-20260930T121617Z.jsonl`), all 18 highlights hit the expected sentence and, with the [answer rule](#7-answer-rules), 8 of 9 labels matched the authored reference, as many as hosted Jev. Warm requests took 0.5–0.7 s. The eight guided-demo e2e tests, recorded through the real Bot against this Server, all passed. One round on authored synthetic cases, not a clinical evaluation.
 
-**Verified result.** The first hosted prediction, for `dose-conflict` (two same-day discharge documents, 10 mg versus 20 mg), returned `potential_conflict` 0.711 (agreement 0.167, insufficient information 0.122) with 186 input tokens and 829.1 ms of server-side inference and readout, at the pinned revision. It matches the authored reference. It is one observation: not a warm-latency benchmark, and not a claim of 71% clinical correctness. The other eight cases have not been run on this endpoint.
+## 5. Run the guided demo on it
 
-## 5. Cost
+In Medplum Project Admin → Secrets, add the three secrets from step 3 and set `CONSISTENCY_BACKEND` to `modal` (`typesafe` switches back). The Bot sends hosted Jev's request to `/v1/systemone` with the proxy token.
 
-Modal lists the RTX PRO 6000 at $0.000842/s ($3.03/h); with the 1.15 US-region multiplier the GPU is about $3.49/h, and a warm hour with the requested 4 CPU cores and 64 GiB RAM is roughly $4.29 before storage. Loading and idle time count. These are list-price estimates, not a measured bill. Scale-to-zero trades idle cost for cold starts. [Pricing](https://modal.com/pricing), [regions](https://modal.com/docs/guide/region-selection).
+- The project secrets and the root `.env` are separate copies of the proxy token. After rotating it, update both; a stale project copy only shows as "rejected the project credentials".
+- `E2E_RECORD=1` overwrites `provider/e2e/cassettes/`, which hold hosted Jev's answers. Keep recordings made against Modal out of Git.
+
+## 6. Cold starts and warm-up
+
+Measured from zero containers on September 30, 2026: GPU scheduling and weight loading take 1–1.5 minutes, then a warm-up of about 2 minutes. `/health` answered 200 after **186 s and 223 s** in two runs. In a third, reading the weights from the Volume ran at about one file per second and took 14 minutes, so the Server was ready after 1,058 s; the logs show the `Loading weights` progress.
+
+- The model's linear-attention kernels compile on first use for each input shape, which made the first requests take 10–37 s. Start-up therefore sends synthetic requests of 1 and 8 questions at five prompt lengths before the Server takes traffic; the Inference logs show `warm-up: … s` when it ends. The first real request then takes about 2 s.
+- While no container is ready, Modal's proxy answers **503 at once** (empty body); it does not queue the request. One request schedules a container, but requests 20 s apart once saw none for over 80 s, while retrying every 2 s scheduled one at once.
+- The Bot is a Lambda with Medplum's default 10-second `timeout` and gives the model 8 s, so it cannot wait out a cold start. After an idle period, the first **Check note** shows "The self-hosted model is starting or unavailable"; that request starts the GPU, so check again in about four minutes.
+
+Warm the Server before a demo or a measurement run:
+
+```bash
+set -a; . ./.env; set +a
+until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Modal-Key: $CONSISTENCY_MODAL_KEY" \
+  -H "Modal-Secret: $CONSISTENCY_MODAL_SECRET" "$CONSISTENCY_MODEL_URL/health")" = 200 ]; do sleep 2; done
+```
+
+## 7. Answer rules
+
+When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: hosted Jev gets that case right itself, and on September 30, 2026 the rule changed none of its nine answers (`artifacts/typesafe-run-20260930T134049Z.jsonl`).
+
+The remaining miss is `dose-dates-unexplained`: two dated doses with no explanation, which the reference calls insufficient information and Jebadiah flags as `potential_conflict` (0.94).
+
+## 8. Cost
+
+Modal lists the A100 80 GB at $2.50/h. With 4 CPU cores, 8 GiB of RAM and the 1.15 US-region multiplier, a warm hour is about **$3.16** before storage. Each cold start plus the five idle minutes is usually about 9 GPU minutes, around $0.47, and about $1.20 when the weights load slowly (step 6). These are list-price estimates, not a measured bill. [Pricing](https://modal.com/pricing), [regions](https://modal.com/docs/guide/region-selection).
+
+To stop paying after a test, run `modal container stop -y <id>` (from `modal container list`). A container stopped within five minutes of the last request is **replaced**, so stop it after that window and list again.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| `An image tried to run a build step after using image.add_local_*` | Use the current `demo/modal_app.py`: packages install before local source is attached |
-| `/bin/sh: 1: python: not found` during the image build | Use the current image definition; it aliases the image's `python3` before installing packages |
+| `429 Too Many Requests` from the Hub while staging | Set `HUGGING_FACE_TOKEN` to a read token (step 1) |
+| `Function has 2 dependencies but container got 3 object ids` | Deploy and run from the same `demo/modal_app.py`; only `modal run` needs the token |
 | `CONSISTENCY_MODEL_URL must be the HTTPS Modal Server origin` / `Invalid URL` | Store only the origin, as plain text |
-| HTTP 503 | GPU starting or failed; read the Inference logs, wait, retry deliberately |
+| HTTP 503, empty body | No container ready yet ([step 6](#6-cold-starts-and-warm-up)); read the Inference logs, retry every few seconds |
+| HTTP 503 from `/health` with a JSON body | The weights are still loading |
 | HTTP 401 / 403 | Check the Proxy Token id and secret, workspace and environment scope |
+| Card: The self-hosted model is starting or unavailable | Cold start; check again in about four minutes (step 6) |
+| Card: The self-hosted model rejected the project credentials | Stale or mis-scoped proxy token in the project secrets (step 5) |
+| Card: The self-hosted model could not check this note | The request exceeds the server's 4,096-token prompt limit |
+| A stopped container comes back | It was inside the five-minute scale-down window (step 8) |
+| `Failed to fetch tokens: Invalid client` / `Not logged in` from the Medplum CLI | The CLI session expired: `npx --prefix provider medplum login` |
 | Secrets not visible to the Bot | Use ordinary project Secrets; the Bot's System flag only adds `Project.systemSecret`, and ordinary entries override same-named system ones |
-
-## Next step: a text contract
-
-To run the guided demo on this model, add an endpoint that accepts `{documents, question}` with a body cap and returns the same three-label distribution, answering 422 when the rendered prompt exceeds `MAX_CONTEXT_TOKENS` without tripping the fail-closed 503 state. Then implement the Bot's `modal` branch in `provider/bots/consistency.ts` with the proxy-token secrets above and set `CONSISTENCY_BACKEND=modal`. Until then `demo/gpu_api.py`, `demo/engine.py` and `demo/modal_app.py` keep the case-id contract.
 
 ## Residency and patient data
 
