@@ -180,8 +180,8 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
                   contract.labels.map((label) => (
                     <Table.Tr key={`${r.medication}-${label}`}>
                       <Table.Td>{r.medication}</Table.Td>
-                      <Table.Td>{REVIEW_LABELS[label as ReviewLabel]}</Table.Td>
-                      <Table.Td>{(r.probabilities[label as ReviewLabel] * 100).toFixed(1)}%</Table.Td>
+                      <Table.Td>{REVIEW_LABELS[label]}</Table.Td>
+                      <Table.Td>{(r.probabilities[label] * 100).toFixed(1)}%</Table.Td>
                     </Table.Tr>
                   ))
                 )}

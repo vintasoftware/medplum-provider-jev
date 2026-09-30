@@ -1,6 +1,13 @@
 import type { WithId } from '@medplum/core';
 import { createReference } from '@medplum/core';
-import type { ClinicalImpression, DetectedIssue, DocumentReference, Encounter, Patient, Task } from '@medplum/fhirtypes';
+import type {
+  ClinicalImpression,
+  DetectedIssue,
+  DocumentReference,
+  Encounter,
+  Patient,
+  Task,
+} from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { MedplumProvider } from '@medplum/react';
 import type { RenderHookResult } from '@testing-library/react';
@@ -150,7 +157,9 @@ describe('useConsistencyCheck', () => {
     const [ruled] = (botResult() as ReviewSuccess).results;
     vi.spyOn(medplum, 'executeBot').mockResolvedValue(
       botResult({
-        results: [{ ...ruled, choice: 'insufficient_information', sentence_note: undefined, label_rule: 'no_dose_sentence' }],
+        results: [
+          { ...ruled, choice: 'insufficient_information', sentence_note: undefined, label_rule: 'no_dose_sentence' },
+        ],
       })
     );
     const { result } = setup();

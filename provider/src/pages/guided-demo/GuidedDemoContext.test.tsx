@@ -31,7 +31,7 @@ interface Probe {
   navigate: ReturnType<typeof useNavigate>;
 }
 
-/** Both demo hooks plus the router, as a chart component under the provider sees them. */
+// Both demo hooks plus the router, as a chart component under the provider sees them.
 function useProbe(): Probe {
   return {
     controller: useGuidedDemoController(),
@@ -130,12 +130,7 @@ describe('GuidedDemoProvider', () => {
     const { result } = setup();
     await act(async () => result.current.controller?.start());
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    expect(Object.keys(stored).sort()).toEqual([
-      'acknowledged',
-      'encounterId',
-      'patientId',
-      'tutorial',
-    ]);
+    expect(Object.keys(stored).sort()).toEqual(['acknowledged', 'encounterId', 'patientId', 'tutorial']);
     expect(stored.tutorial).toBe('active');
     expect(JSON.stringify(stored)).not.toMatch(/Lisinopril|lisinopril|Demo/);
     expect(result.current.pathname).toBe(`/Patient/${stored.patientId}`);

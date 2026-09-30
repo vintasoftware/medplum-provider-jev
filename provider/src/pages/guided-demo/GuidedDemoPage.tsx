@@ -73,16 +73,17 @@ export function GuidedDemoPage(): JSX.Element {
               {STEPS.map((step, i) => {
                 const done = i < (demo?.currentStep ?? 0);
                 const isCurrent = i === demo?.currentStep;
+                let color = 'gray';
+                if (done) {
+                  color = 'teal';
+                } else if (isCurrent) {
+                  color = 'blue';
+                }
                 return (
                   <List.Item
                     key={step.id}
                     icon={
-                      <ThemeIcon
-                        size={20}
-                        radius="xl"
-                        color={done ? 'teal' : isCurrent ? 'blue' : 'gray'}
-                        variant="light"
-                      >
+                      <ThemeIcon size={20} radius="xl" color={color} variant="light">
                         {done ? <IconCheck size={12} /> : <IconPoint size={12} />}
                       </ThemeIcon>
                     }

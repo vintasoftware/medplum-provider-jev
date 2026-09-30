@@ -1,6 +1,6 @@
 import { Button, Group, Paper, Text } from '@mantine/core';
 import { IconRoute } from '@tabler/icons-react';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { showErrorNotification } from '../../utils/notifications';
 import { useGuidedDemoController } from './GuidedDemoContext';
 import { COMPLETE, STEPS } from './tour/steps';
@@ -10,6 +10,7 @@ import { useTutorialOverlay } from './tour/useTutorialOverlay';
  * Compact one-line bar shown above every page while a guided scenario is active. It names the current
  * step, re-highlights it, and hides or resumes the overlays. Hiding changes only local
  * state: the chart, the automatic check, signing and tasks work the same either way.
+ * @returns The bar, or null outside a scenario.
  */
 export function TutorialCoach(): JSX.Element | null {
   const demo = useGuidedDemoController();
@@ -25,6 +26,15 @@ export function TutorialCoach(): JSX.Element | null {
   const hidden = scenario.tutorial === 'dismissed';
   const loading = !demo.serverState;
 
+  let status: string;
+  if (complete) {
+    status = 'Tutorial complete';
+  } else if (loading) {
+    status = 'Loading scenario…';
+  } else {
+    status = `${hidden ? 'Tutorial hidden · ' : ''}${progress}: ${step.title}`;
+  }
+
   let detail: string | undefined;
   if (!hidden && !complete && !loading) {
     if (overlay.waiting) {
@@ -32,6 +42,37 @@ export function TutorialCoach(): JSX.Element | null {
     } else if (overlay.missingAnchor) {
       detail = step.description;
     }
+  }
+
+  let actions: ReactNode;
+  if (complete) {
+    actions = (
+      <Button
+        size="compact-sm"
+        variant="light"
+        onClick={() => demo.start().catch(showErrorNotification)}
+        loading={demo.starting}
+      >
+        Replay with a new patient
+      </Button>
+    );
+  } else if (hidden) {
+    actions = (
+      <Button size="compact-sm" variant="light" onClick={overlay.showMe}>
+        Resume
+      </Button>
+    );
+  } else {
+    actions = (
+      <>
+        <Button size="compact-sm" variant="light" onClick={overlay.showMe} disabled={loading}>
+          Show me
+        </Button>
+        <Button size="compact-sm" variant="subtle" onClick={() => demo.setTutorial('dismissed')}>
+          Hide tutorial
+        </Button>
+      </>
+    );
   }
 
   return (
@@ -43,11 +84,7 @@ export function TutorialCoach(): JSX.Element | null {
             Guided demo
           </Text>
           <Text size="sm" c="dimmed" truncate>
-            {complete
-              ? 'Tutorial complete'
-              : loading
-                ? 'Loading scenario…'
-                : `${hidden ? 'Tutorial hidden · ' : ''}${progress}: ${step.title}`}
+            {status}
           </Text>
           {detail && (
             <Text size="sm" truncate data-testid="coach-detail">
@@ -56,29 +93,7 @@ export function TutorialCoach(): JSX.Element | null {
           )}
         </Group>
         <Group gap={4} wrap="nowrap">
-          {complete ? (
-            <Button
-              size="compact-sm"
-              variant="light"
-              onClick={() => demo.start().catch(showErrorNotification)}
-              loading={demo.starting}
-            >
-              Replay with a new patient
-            </Button>
-          ) : hidden ? (
-            <Button size="compact-sm" variant="light" onClick={overlay.showMe}>
-              Resume
-            </Button>
-          ) : (
-            <>
-              <Button size="compact-sm" variant="light" onClick={overlay.showMe} disabled={loading}>
-                Show me
-              </Button>
-              <Button size="compact-sm" variant="subtle" onClick={() => demo.setTutorial('dismissed')}>
-                Hide tutorial
-              </Button>
-            </>
-          )}
+          {actions}
           <Button size="compact-sm" variant="subtle" color="gray" onClick={demo.end}>
             End scenario
           </Button>

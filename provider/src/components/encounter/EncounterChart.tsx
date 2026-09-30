@@ -69,6 +69,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
     onSaved: demo?.refresh,
   });
   const check = useConsistencyCheck(encounter, { beforeCheck: flushChartNote, onChange: demo?.refresh });
+  const { runCheck } = check;
 
   useEffect(() => {
     if (!encounter) {
@@ -114,14 +115,14 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
         // Check the note once when the visit becomes Finished. This runs only from the
         // user's status change, never on render or reload. The check saves the note first.
         if (newStatus === 'finished' && previousStatus !== 'finished' && clinicalImpression) {
-          check.runCheck().catch(showErrorNotification);
+          runCheck().catch(showErrorNotification);
         }
         demo?.refresh();
       } catch (err) {
         showErrorNotification(err);
       }
     },
-    [encounter, medplum, setEncounter, onEncounterChange, appointment, clinicalImpression, demo, check.runCheck]
+    [encounter, medplum, setEncounter, onEncounterChange, appointment, clinicalImpression, demo, runCheck]
   );
 
   const handleTabChange = (tab: string): void => {
@@ -194,7 +195,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   };
 
   const handleCheckNote = (): void => {
-    check.runCheck().catch(showErrorNotification);
+    runCheck().catch(showErrorNotification);
   };
 
   const handleEditNote = (): void => {

@@ -4,7 +4,13 @@ import { useMedplum, useMedplumProfile } from '@medplum/react';
 import type { JSX, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, headlineResult, implicatedNote, readStoredCheck } from '../../utils/consistency';
+import {
+  CHECK_CODE,
+  CHECK_CODE_SYSTEM,
+  headlineResult,
+  implicatedNote,
+  readStoredCheck,
+} from '../../utils/consistency';
 import { noteSearch } from '../../utils/consistency-review';
 import { seedScenario } from './seedScenario';
 import type { ScenarioState } from './tour/steps';
@@ -42,7 +48,10 @@ export interface GuidedDemoValue {
 
 const ControllerContext = createContext<GuidedDemoController | undefined>(undefined);
 
-/** Returns undefined outside a guided scenario, so chart components work without the demo. */
+/**
+ * The demo hook for chart components.
+ * @returns The hook, or undefined outside a guided scenario so the chart works without the demo.
+ */
 export function useGuidedDemo(): GuidedDemoValue | undefined {
   const controller = useContext(ControllerContext);
   return controller?.scenario ? controller : undefined;
@@ -190,7 +199,7 @@ export function GuidedDemoProvider({ children }: { children: ReactNode }): JSX.E
   );
 
   const start = useCallback(async () => {
-    if (!profile || profile.resourceType !== 'Practitioner') {
+    if (profile?.resourceType !== 'Practitioner') {
       throw new Error('Sign in as a practitioner to start the scenario');
     }
     setStarting(true);

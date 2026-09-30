@@ -190,7 +190,7 @@ export function useConsistencyCheck(
         intent: 'order',
         priority: 'routine',
         code: { text: `Reconcile ${headline.medication} dose with outside discharge summary` },
-        for: encounter.subject as Reference<Patient>,
+        for: encounter.subject,
         owner: author,
         requester: author,
         authoredOn: new Date().toISOString(),

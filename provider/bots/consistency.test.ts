@@ -1,6 +1,6 @@
 import type { BotEvent, MedplumRequestOptions, WithId } from '@medplum/core';
 import { ReadablePromise } from '@medplum/core';
-import type { ClinicalImpression, DocumentReference, Encounter, Patient } from '@medplum/fhirtypes';
+import type { ClinicalImpression, DocumentReference, Encounter, MedicationRequest, Patient } from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import scenario from '../src/data/guided-scenario.json';
@@ -87,8 +87,12 @@ beforeEach(async () => {
   medplum = new MockClient();
   lookupMock = vi.fn(async (url: URL) => {
     const code = new URL(url).searchParams.get('code');
-    if (code === '314076') return terminology('lisinopril 10 MG Oral Tablet', 'SCD', ['{316151} 29046']);
-    if (code === '29046') return terminology('lisinopril', 'IN');
+    if (code === '314076') {
+      return terminology('lisinopril 10 MG Oral Tablet', 'SCD', ['{316151} 29046']);
+    }
+    if (code === '29046') {
+      return terminology('lisinopril', 'IN');
+    }
     throw new Error('Unexpected lookup');
   });
   const originalGet = medplum.get.bind(medplum);
@@ -183,7 +187,9 @@ describe('consistency Bot', () => {
         },
       ],
     });
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.documents.map((d) => d.source)).toEqual([
       expect.stringMatching(/^DocumentReference\//),
       `ClinicalImpression/${impression.id}`,
@@ -201,7 +207,9 @@ describe('consistency Bot', () => {
       note: [{ text: 'An older note for this visit.' }],
     });
     // Saving the note makes it the newest again.
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
     await medplum.updateResource({ ...impression, note: [{ text: NOTE }] });
     // A note that names this encounter but another patient is never read.
     await medplum.createResource<ClinicalImpression>({
@@ -213,7 +221,9 @@ describe('consistency Bot', () => {
     });
 
     const result = await handler(medplum, event(review()));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.documents[1]).toMatchObject({ source: `ClinicalImpression/${impression.id}`, text: NOTE });
     expect(result.documents[1].source).not.toContain(older.id);
     expect(searchOne).toHaveBeenCalledWith(
@@ -236,12 +246,16 @@ describe('consistency Bot', () => {
       vi.spyOn(medplum, 'deleteResource'),
     ];
     await handler(medplum, event(review()));
-    for (const write of writes) expect(write).not.toHaveBeenCalled();
+    for (const write of writes) {
+      expect(write).not.toHaveBeenCalled();
+    }
   });
 
   test('reads a Binary when the attachment has only a URL', async () => {
     const summaries = await medplum.searchResources('DocumentReference', { type: 'http://loinc.org|18842-5' });
-    for (const doc of summaries) await medplum.updateResource({ ...doc, status: 'superseded' });
+    for (const doc of summaries) {
+      await medplum.updateResource({ ...doc, status: 'superseded' });
+    }
     vi.spyOn(medplum, 'download').mockResolvedValue(new Blob([scenario.discharge_summary]));
     await discharge('2026-09-16T12:00:00Z', '', {
       content: [{ attachment: { contentType: 'text/plain', url: 'Binary/summary' } }],
@@ -259,8 +273,9 @@ describe('consistency Bot', () => {
     [
       'no document',
       async () => {
-        for (const doc of await medplum.searchResources('DocumentReference', {}))
+        for (const doc of await medplum.searchResources('DocumentReference', {})) {
           await medplum.updateResource({ ...doc, status: 'entered-in-error' });
+        }
       },
       'No outside discharge summary',
     ],
@@ -280,8 +295,9 @@ describe('consistency Bot', () => {
     [
       'no active medications',
       async () => {
-        for (const mr of await medplum.searchResources('MedicationRequest', {}))
+        for (const mr of await medplum.searchResources('MedicationRequest', {})) {
           await medplum.updateResource({ ...mr, status: 'stopped' });
+        }
       },
       'No active medications',
     ],
@@ -352,7 +368,9 @@ describe('consistency Bot', () => {
   ])('on %s, a document with no dose sentence makes an agreement insufficient information', async (_name, values) => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse(undefined))));
     const result = await handler(medplum, event(review(), values));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.results[0]).toMatchObject({
       choice: 'insufficient_information',
       label_rule: 'no_dose_sentence',
@@ -364,7 +382,9 @@ describe('consistency Bot', () => {
   test('keeps the model label for an unusable highlight answer', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse({ type: 'noul', noul: 0.5 }))));
     const result = await handler(medplum, event(review(), MODAL));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.results[0].choice).toBe('agreement');
     expect(result.results[0].label_rule).toBeUndefined();
   });
@@ -373,7 +393,9 @@ describe('consistency Bot', () => {
     const conflict = { agreement: 0.1, potential_conflict: 0.8, insufficient_information: 0.1 };
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse(undefined, conflict))));
     const result = await handler(medplum, event(review(), MODAL));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.results[0].choice).toBe('potential_conflict');
     expect(result.results[0].label_rule).toBeUndefined();
   });
@@ -393,7 +415,9 @@ describe('consistency Bot', () => {
 
   test('on Modal, keeps the label when both documents have a dose sentence', async () => {
     const result = await handler(medplum, event(review(), MODAL));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.results[0].choice).toBe('potential_conflict');
     expect(result.results[0].label_rule).toBeUndefined();
   });
@@ -510,7 +534,9 @@ describe('consistency Bot', () => {
       )
     );
     const result = await handler(medplum, event(review()));
-    if (result.status !== 'ok') throw new Error('expected ok');
+    if (result.status !== 'ok') {
+      throw new Error('expected ok');
+    }
     expect(result.results[0].sentence_note).toBeUndefined();
     expect(result.results[0].sentence_outside).toBeDefined();
   });
@@ -536,14 +562,14 @@ function terminology(name: string, tty: string, ai: string[] = [], related: stri
   };
 }
 
-/** A request that never answers and rejects when its signal aborts, as MedplumClient and fetch do. */
+// A request that never answers and rejects when its signal aborts, as MedplumClient and fetch do.
 function stalled(signal: AbortSignal | null | undefined): Promise<never> {
-  return new Promise((_, reject) =>
-    signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')))
-  );
+  return new Promise((_, reject) => {
+    signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
+  });
 }
 
-function medication(code?: string): import('@medplum/fhirtypes').MedicationRequest {
+function medication(code?: string): MedicationRequest {
   return {
     resourceType: 'MedicationRequest',
     status: 'active',
@@ -579,8 +605,12 @@ describe('RxNorm ingredient resolution', () => {
   test('keeps every combination ingredient in one target and deduplicates by the sorted code set', async () => {
     lookupMock.mockImplementation(async (url) => {
       const code = new URL(url).searchParams.get('code');
-      if (code === '2264108') return terminology('fibrinogen, human', 'PIN');
-      if (code === '825006') return terminology('thrombin, human', 'PIN');
+      if (code === '2264108') {
+        return terminology('fibrinogen, human', 'PIN');
+      }
+      if (code === '825006') {
+        return terminology('thrombin, human', 'PIN');
+      }
       const ai = ['{2572161} 2264108', '{2572162} 825006'];
       return terminology('TachoSil 171 MG', 'SBD', code === '1014305' ? ai : ai.reverse());
     });
@@ -598,8 +628,12 @@ describe('RxNorm ingredient resolution', () => {
     });
     lookupMock.mockImplementation(async (url) => {
       const code = url.searchParams.get('code');
-      if (code === '2264108') return terminology('fibrinogen, human', 'PIN');
-      if (code === '825006') return terminology('thrombin, human', 'PIN');
+      if (code === '2264108') {
+        return terminology('fibrinogen, human', 'PIN');
+      }
+      if (code === '825006') {
+        return terminology('thrombin, human', 'PIN');
+      }
       return terminology('TachoSil', 'SBD', ['{2572161} 2264108', '{2572162} 825006']);
     });
     const result = await handler(medplum, event(review()));
@@ -713,7 +747,9 @@ describe('RxNorm ingredient resolution', () => {
 
   test('hides lookup error details and fails if an ingredient lookup fails', async () => {
     lookupMock.mockImplementation(async (url) => {
-      if (new URL(url).searchParams.get('code') === '314076') return terminology('drug', 'SCD', ['{316151} 29046']);
+      if (new URL(url).searchParams.get('code') === '314076') {
+        return terminology('drug', 'SCD', ['{316151} 29046']);
+      }
       throw new Error(`${NOTE} ts-test`);
     });
     expect(await handler(medplum, event(review()))).toEqual({

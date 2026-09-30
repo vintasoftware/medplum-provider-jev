@@ -3,7 +3,7 @@ import { copyFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, URL } from 'node:url';
 
 // Load the actual artifact as user.mjs, matching the hosted loader.
 // Moving it also verifies that the model contract is bundled.
@@ -24,7 +24,10 @@ test('ESM artifact exports the handler and reports a missing backend without rea
 
 test('deployment artifact rejects visitor documents', async () => {
   await assert.rejects(
-    handler(unreachable, event({ action: 'review_encounter', encounter_id: 'visit-1', text: 'Unexpected visitor text' })),
+    handler(
+      unreachable,
+      event({ action: 'review_encounter', encounter_id: 'visit-1', text: 'Unexpected visitor text' })
+    ),
     /Only \{ action: "review_encounter", encounter_id \} is accepted/
   );
 });

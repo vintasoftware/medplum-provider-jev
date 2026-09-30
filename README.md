@@ -92,6 +92,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Check the project setup again | `npm --prefix provider run setup -- --dry-run` |
 | Rewrite `provider/.env.local` from the root `.env` | `npm --prefix provider run configure` |
 | Unit tests | `npm --prefix provider test -- bots src/components/encounter src/pages/guided-demo scripts` |
+| Lint with Medplum's ESLint config | `npm --prefix provider run lint` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
 | Measure hosted Jev on the authored cases and scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
 | Bot artifact smoke test | `npm --prefix provider run test:bot-bundle` |

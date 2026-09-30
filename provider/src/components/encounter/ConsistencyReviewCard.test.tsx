@@ -48,7 +48,12 @@ function makeIssue(result: ReviewResult = CONFLICT, mitigation?: DetectedIssue['
     outside_version: '1',
     results: [result],
     documents: [
-      { title: 'Discharge summary', date: '2026-09-16', text: scenario.discharge_summary, source: 'DocumentReference/d1' },
+      {
+        title: 'Discharge summary',
+        date: '2026-09-16',
+        text: scenario.discharge_summary,
+        source: 'DocumentReference/d1',
+      },
       { title: "Today's visit note", date: '2026-09-23', text: NOTE, source: 'ClinicalImpression/ci1' },
     ],
   };

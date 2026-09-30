@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import type { ModelService } from '../bots/consistency';
 import { buildRequest, modelService } from '../bots/consistency';
-import { splitSentences } from '../src/utils/consistency-review';
 import contract from '../src/data/model-contract.json';
+import { splitSentences } from '../src/utils/consistency-review';
 import type { MeasurementCase } from './measure-jev';
 import { measure, measurementCases } from './measure-jev';
 
@@ -22,7 +22,7 @@ const modal = (url: string, key: string, secret: string): ModelService =>
       })[name]
   );
 
-/** A highlight answer over `text`'s sentences: 0.9 on the picked option. */
+// A highlight answer over `text`'s sentences: 0.9 on the picked option.
 function sentenceAnswer(text: string, picked: number | 'none'): unknown {
   const count = splitSentences(text).length;
   const option = picked === 'none' ? 'none' : `s${picked + 1}`;
@@ -131,7 +131,7 @@ describe('measure-jev', () => {
       service: typesafe('k'),
       outFile: file,
       cases,
-      fetch: fetchMock as any,
+      fetch: fetchMock,
       log: () => undefined,
     });
     expect(ok).toBe(0);
@@ -150,7 +150,7 @@ describe('measure-jev', () => {
       service: typesafe('k'),
       outFile: file,
       cases,
-      fetch: (async () => new Response(JSON.stringify(bad))) as any,
+      fetch: async () => new Response(JSON.stringify(bad)),
       log: () => undefined,
     });
     expect(ok).toBe(0);
@@ -165,7 +165,7 @@ describe('measure-jev', () => {
       service: modal('https://example.us-east.modal.direct/', 'wk-a', 'ws-b'),
       outFile: outFile(),
       cases: [item],
-      fetch: fetchMock as any,
+      fetch: fetchMock,
       log: () => undefined,
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -185,7 +185,7 @@ describe('measure-jev', () => {
         service,
         outFile: file,
         cases: [item],
-        fetch: (async () => new Response(body)) as any,
+        fetch: async () => new Response(body),
         log: () => undefined,
       });
       rows.push(JSON.parse(readFileSync(file, 'utf8')));

@@ -58,9 +58,7 @@ export function useChartNoteAutosave(
             ]);
             noteOnServerRef.current = true;
           } else if (noteOnServerRef.current ?? Boolean(clinicalImpression.note)) {
-            await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [
-              { op: 'remove', path: '/note' },
-            ]);
+            await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [{ op: 'remove', path: '/note' }]);
             noteOnServerRef.current = false;
           } else {
             return;

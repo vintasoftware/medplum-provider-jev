@@ -52,7 +52,7 @@ interface Harness {
   acknowledged: string[];
 }
 
-/** The overlay on a fixed step, with the controller state the overlay may change. */
+// The overlay on a fixed step, with the controller state the overlay may change.
 function useHarness(props: HarnessProps): Harness {
   const [tutorial, setTutorial] = useState<TutorialMode>(props.tutorial ?? 'active');
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
@@ -108,7 +108,9 @@ describe('useTutorialOverlay', () => {
   ])('%s hides the tutorial at once', async (_name, exit) => {
     const { result } = setup({ step: 'medications' });
     await waitFor(() => expect(highlighted()).toBe(true));
-    act(() => exit());
+    act(() => {
+      exit();
+    });
     expect(highlighted()).toBe(false);
     expect(popover()).toBeNull();
     expect(result.current.tutorial).toBe('dismissed');
@@ -135,7 +137,9 @@ describe('useTutorialOverlay', () => {
   test('Next acknowledges an informational step', async () => {
     const { result } = setup({ step: 'welcome' });
     await waitFor(() => expect(popover()).toHaveTextContent('Post-discharge follow-up'));
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Next' })));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    });
     expect(result.current.acknowledged).toEqual(['welcome']);
   });
 

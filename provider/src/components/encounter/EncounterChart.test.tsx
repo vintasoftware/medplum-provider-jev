@@ -870,7 +870,10 @@ describe('EncounterChart', () => {
     });
 
     test("edits the newest note of the visit's patient, the one the Bot reads", async () => {
-      const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+      const tick = (): Promise<void> =>
+        new Promise((resolve) => {
+          setTimeout(resolve, 5);
+        });
       await medplum.createResource(finished);
       const older = await medplum.createResource<ClinicalImpression>({
         ...mockClinicalImpression,

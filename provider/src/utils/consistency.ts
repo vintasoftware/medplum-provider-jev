@@ -53,7 +53,11 @@ export async function reviewEncounter(medplum: MedplumClient, encounterId: strin
 
 const SEVERITY: ReviewLabel[] = ['potential_conflict', 'insufficient_information', 'agreement'];
 
-/** The result the card leads with: any conflict first, then missing information. */
+/**
+ * The result the card leads with: any conflict first, then missing information.
+ * @param results - The results of one check.
+ * @returns The result to lead with.
+ */
 export function headlineResult<T extends Pick<ReviewResult, 'choice'>>(results: T[]): T | undefined {
   return [...results].sort((a, b) => SEVERITY.indexOf(a.choice) - SEVERITY.indexOf(b.choice))[0];
 }
@@ -120,9 +124,7 @@ export function buildDetectedIssue(
       .map(
         (r) =>
           `${REVIEW_LABELS[r.choice]} (${r.medication}): ` +
-          contract.labels
-            .map((l) => `${REVIEW_LABELS[l as ReviewLabel]} ${percent(r.probabilities[l as ReviewLabel])}`)
-            .join(', ') +
+          contract.labels.map((l) => `${REVIEW_LABELS[l]} ${percent(r.probabilities[l])}`).join(', ') +
           (r.label_rule === 'no_dose_sentence' ? ' (label set by rule: no dose sentence in one document)' : '')
       )
       .join('; '),
@@ -201,7 +203,12 @@ export async function findLatestCheck(
   );
 }
 
-/** The text of a document's first attachment, inline (`data`) or by URL (e.g. a Binary). */
+/**
+ * The text of a document's first attachment, inline (`data`) or by URL (e.g. a Binary).
+ * @param medplum - The Medplum client.
+ * @param doc - The document.
+ * @returns The text, or undefined without an attachment.
+ */
 export async function attachmentText(medplum: MedplumClient, doc: DocumentReference): Promise<string | undefined> {
   const attachment = doc.content?.[0]?.attachment;
   if (attachment?.data) {

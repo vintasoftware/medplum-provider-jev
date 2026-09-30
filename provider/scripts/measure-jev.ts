@@ -76,7 +76,11 @@ export interface MeasureOptions {
   log?: (line: string) => void;
 }
 
-/** Runs the measurement; returns the number of successful answers. */
+/**
+ * Runs the measurement.
+ * @param options - Rounds, service, cases and output file.
+ * @returns The number of successful answers.
+ */
 export async function measure(options: MeasureOptions): Promise<number> {
   const { rounds, service, outFile } = options;
   const log = options.log ?? console.log;
@@ -94,6 +98,7 @@ export async function measure(options: MeasureOptions): Promise<number> {
         reference_provenance: REFERENCE,
       };
       let failed = false;
+      let httpStatus: number | undefined;
       try {
         const response = await doFetch(service.url, {
           method: 'POST',
@@ -101,11 +106,12 @@ export async function measure(options: MeasureOptions): Promise<number> {
           headers: { 'Content-Type': 'application/json', ...service.headers },
           body: JSON.stringify(buildRequest([item.medication], item.outside, item.note, service.maxSentences)),
         });
-        row.http_status = response.status;
+        httpStatus = response.status;
+        row.http_status = httpStatus;
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        const data = (await response.json()) as any;
+        const data = await response.json();
         if (typeof data?.model !== 'string') {
           throw new Error('Unrecognized model response');
         }
@@ -145,7 +151,7 @@ export async function measure(options: MeasureOptions): Promise<number> {
           ? `  ${item.id.padEnd(30)} ${r.choice.padEnd(25)} ${(r.probabilities[r.model_choice ?? r.choice] as number).toFixed(2)}` +
               `  ${row.matches_reference ? 'matches' : 'DIFFERS'}  highlights ${r.highlight.outside_ok ? 'ok' : 'X'}/${r.highlight.note_ok ? 'ok' : 'X'}` +
               (r.label_rule ? `  (rule; model said ${r.model_choice})` : '')
-          : `  ${item.id.padEnd(30)} failed (HTTP ${row.http_status ?? '-'})`
+          : `  ${item.id.padEnd(30)} failed (HTTP ${httpStatus ?? '-'})`
       );
       if (failed) {
         log(`Incomplete run saved to ${outFile}. Resolve auth or service errors before retrying.`);
