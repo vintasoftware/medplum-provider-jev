@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ReviewOutput } from '../bots/consistency.ts';
+import type { ReviewOutput } from '../src/utils/consistency-review.ts';
 
 // Records the consistency Bot's responses (which carry hosted Jev's answers) per test, and
 // replays them on later runs so tests do not call the Bot or TypeSafe again.

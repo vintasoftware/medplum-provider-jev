@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import contract from '../../data/model-contract.json';
 import { useGuidedDemo } from '../../pages/guided-demo/GuidedDemoContext';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
-import type { ReviewLabel, StoredCheck } from '../../utils/consistency';
+import type { StoredCheck } from '../../utils/consistency';
 import {
   appendMitigation,
   attachmentText,
@@ -39,8 +39,9 @@ import {
   REVIEW_LABEL_COLORS,
   REVIEW_LABELS,
   reviewEncounter,
-  splitSentences,
 } from '../../utils/consistency';
+import type { ReviewLabel } from '../../utils/consistency-review';
+import { splitSentences } from '../../utils/consistency-review';
 import { showErrorNotification } from '../../utils/notifications';
 
 export interface ConsistencyReviewCardProps {

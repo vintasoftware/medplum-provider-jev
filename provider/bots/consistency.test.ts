@@ -5,7 +5,8 @@ import { MockClient } from '@medplum/mock';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import scenario from '../src/data/guided-scenario.json';
 import contract from '../src/data/model-contract.json';
-import { buildRequest, handler, modalOrigin, resolveMedications, splitSentences } from './consistency';
+import { splitSentences } from '../src/utils/consistency-review';
+import { buildRequest, handler, modalOrigin, resolveMedications } from './consistency';
 
 const NOTE = scenario.variants[0].note;
 let medplum: MockClient;

@@ -4,14 +4,8 @@ import { useMedplum, useMedplumProfile } from '@medplum/react';
 import type { JSX, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import {
-  CHECK_CODE,
-  CHECK_CODE_SYSTEM,
-  headlineResult,
-  implicatedNote,
-  noteSearch,
-  readStoredCheck,
-} from '../../utils/consistency';
+import { CHECK_CODE, CHECK_CODE_SYSTEM, headlineResult, implicatedNote, readStoredCheck } from '../../utils/consistency';
+import { noteSearch } from '../../utils/consistency-review';
 import { seedScenario } from './seedScenario';
 import type { ScenarioState } from './tour/steps';
 import { deriveCurrentStep, STEPS } from './tour/steps';

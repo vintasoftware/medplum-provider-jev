@@ -17,8 +17,9 @@ import type { JSX } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import scenario from '../../data/guided-scenario.json';
-import type { ReviewOutput } from '../../utils/consistency';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, splitSentences } from '../../utils/consistency';
+import { CHECK_CODE, CHECK_CODE_SYSTEM } from '../../utils/consistency';
+import type { ReviewOutput } from '../../utils/consistency-review';
+import { splitSentences } from '../../utils/consistency-review';
 import type { ConsistencyReviewCardProps } from './ConsistencyReviewCard';
 import { ConsistencyReviewCard } from './ConsistencyReviewCard';
 

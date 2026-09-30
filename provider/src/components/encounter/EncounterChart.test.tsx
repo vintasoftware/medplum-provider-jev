@@ -10,7 +10,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION, noteSearch } from '../../utils/consistency';
+import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION } from '../../utils/consistency';
+import { noteSearch } from '../../utils/consistency-review';
 import { EncounterChart } from './EncounterChart';
 
 const mockPractitioner: WithId<Practitioner> = {

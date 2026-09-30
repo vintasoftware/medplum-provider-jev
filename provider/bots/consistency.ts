@@ -7,6 +7,8 @@ import type {
   Parameters,
 } from '@medplum/fhirtypes';
 import contract from '../src/data/model-contract.json' with { type: 'json' };
+import type { ReviewLabel, ReviewOutput, ReviewResult } from '../src/utils/consistency-review.ts';
+import { noteSearch, splitSentences } from '../src/utils/consistency-review.ts';
 
 // Reads the visit note, the newest outside discharge summary and the active medications
 // as the signed-in user (the Bot runs with runAsUser), asks the model whether the two
@@ -21,42 +23,8 @@ const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const { limits, labels } = contract;
 
-/**
- * The search that picks a visit's note: the most recently updated ClinicalImpression for the
- * encounter and its patient. The editor, the Bot and the tutorial use it so they read the same note.
- */
-export function noteSearch(encounter: string, subject: string): Record<string, string> {
-  return { encounter, subject, _sort: '-_lastUpdated', _count: '1' };
-}
-
-type Label = (typeof contract.labels)[number];
 type SourceDocument = { title: string; date: string; author: string; text: string };
 type Question = { type: 'choice' | 'noul'; instructions: string; criteria?: Record<string, string> };
-
-export type ReviewResult = {
-  medication: string;
-  choice: Label;
-  probabilities: Record<Label, number>;
-  confidence: number;
-  sentence_outside?: string;
-  sentence_note?: string;
-  /** Set when a rule, not the model's top score, chose `choice`; `probabilities` and `confidence` stay the model's. */
-  label_rule?: 'no_dose_sentence';
-};
-
-export type ReviewOutput =
-  | {
-      status: 'ok';
-      checked_at: string;
-      model: string;
-      input_tokens: number;
-      results: ReviewResult[];
-      mentions_hospital_stay: number;
-      documents: { title: string; date: string; text: string; source: string }[];
-      note_version: string;
-      outside_version: string;
-    }
-  | { status: 'unavailable'; reason: string };
 
 /** A problem the card shows as-is. Never include document text or secrets in the message. */
 class Unavailable extends Error {}
@@ -84,13 +52,6 @@ export function cleanText(text: string): string {
   // Drop carriage returns and control characters except newline and tab.
   // eslint-disable-next-line no-control-regex
   return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim();
-}
-
-export function splitSentences(text: string): string[] {
-  return text
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
 }
 
 const RXNORM = 'http://www.nlm.nih.gov/research/umls/rxnorm';
@@ -539,8 +500,8 @@ export function doseResult(
   const ruled = choice === 'agreement' && (outside === null || note === null);
   return {
     medication,
-    choice: ruled ? 'insufficient_information' : (choice as Label),
-    probabilities: probabilities as Record<Label, number>,
+    choice: ruled ? 'insufficient_information' : (choice as ReviewLabel),
+    probabilities: probabilities as Record<ReviewLabel, number>,
     confidence,
     sentence_outside: outside ?? undefined,
     sentence_note: note ?? undefined,

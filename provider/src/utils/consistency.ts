@@ -10,14 +10,9 @@ import type {
   Practitioner,
   Reference,
 } from '@medplum/fhirtypes';
-import type { ReviewOutput, ReviewResult } from '../../bots/consistency';
-import { noteSearch, splitSentences } from '../../bots/consistency';
 import contract from '../data/model-contract.json';
-
-export { noteSearch, splitSentences };
-export type { ReviewOutput };
-export type ReviewLabel = ReviewResult['choice'];
-export type ReviewSuccess = Extract<ReviewOutput, { status: 'ok' }>;
+import type { ReviewLabel, ReviewOutput, ReviewResult, ReviewSuccess } from './consistency-review';
+import { splitSentences } from './consistency-review';
 
 export const REVIEW_LABELS: Record<ReviewLabel, string> = {
   agreement: 'Agreement',

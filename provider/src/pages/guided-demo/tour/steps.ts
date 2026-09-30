@@ -1,5 +1,5 @@
 import scenario from '../../../data/guided-scenario.json';
-import type { ReviewLabel } from '../../../utils/consistency';
+import type { ReviewLabel } from '../../../utils/consistency-review';
 import { PATIENT_TAB_SELECTORS, TOUR, tourSelector } from './anchors';
 
 // The tutorial never advances by hand. Each step is done when the chart's server state
