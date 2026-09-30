@@ -91,7 +91,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Redeploy the Bot after changing `provider/bots/consistency.ts` or `provider/src/utils/consistency-review.ts` | `npm --prefix provider run deploy:bot` |
 | Check the project setup again | `npm --prefix provider run setup -- --dry-run` |
 | Rewrite `provider/.env.local` from the root `.env` | `npm --prefix provider run configure` |
-| Unit tests | `npm --prefix provider test -- bots src/components/encounter src/pages/guided-demo scripts` |
+| Unit tests (the whole app, about a minute) | `npm --prefix provider test` |
 | Lint with Medplum's ESLint config | `npm --prefix provider run lint` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
 | Measure hosted Jev on the authored cases and scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
