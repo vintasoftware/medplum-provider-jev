@@ -71,7 +71,7 @@ npm --prefix provider run measure -- --backend modal
 
 It sends the Bot's exact requests for the five authored dose cases and the four scenario notes, and writes `artifacts/modal-run-<UTC>.jsonl` with each label, the scores, the highlighted sentences and whether they hit the expected ones. It stops at the first 503: warm the Server first ([step 6](#6-cold-starts-and-warm-up)).
 
-**Result.** On September 30, 2026, on the A100 (`artifacts/modal-run-20260930T121617Z.jsonl`), all 18 highlights hit the expected sentence and, with the [answer rule](#7-answer-rules), 8 of 9 labels matched the authored reference, as many as hosted Jev. Warm requests took 0.5–0.7 s. The eight guided-demo e2e tests, recorded through the real Bot against this Server, all passed. One round on authored synthetic cases, not a clinical evaluation.
+**Result.** On September 30, 2026, on the A100 (`artifacts/modal-run-20260930T145319Z.jsonl`), all 18 highlights hit the expected sentence and, with the [answer rule](#7-answer-rules), 8 of 9 labels matched the authored reference, as many as hosted Jev. Warm requests took 0.5–0.7 s. The eight guided-demo e2e tests, recorded through the real Bot against this Server, all passed. One round on authored synthetic cases, not a clinical evaluation.
 
 ## 5. Run the guided demo on it
 
@@ -98,7 +98,7 @@ until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Modal-Key: $CONSISTENCY_MO
 
 ## 7. Answer rules
 
-When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: hosted Jev gets that case right itself, and on September 30, 2026 the rule changed none of its nine answers (`artifacts/typesafe-run-20260930T134049Z.jsonl`).
+When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: hosted Jev gets that case right itself, and on September 30, 2026 the rule changed none of its nine answers (`artifacts/typesafe-run-20260930T144803Z.jsonl`).
 
 The remaining miss is `dose-dates-unexplained`: two dated doses with no explanation, which the reference calls insufficient information and Jebadiah flags as `potential_conflict` (0.94).
 

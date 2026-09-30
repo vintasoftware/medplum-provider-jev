@@ -11,7 +11,7 @@
     {
       "id": "resolved-after-edit",
       "expected": "agreement",
-      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks."
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks."
     },
     {
       "id": "no-dose",

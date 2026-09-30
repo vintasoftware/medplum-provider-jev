@@ -1,15 +1,15 @@
 {
   "description": "side path: a note that acknowledges the change agrees and skips to signing",
-  "recorded_at": "2026-09-24T12:09:18.039Z",
+  "recorded_at": "2026-09-30T14:46:46.911Z",
   "contract_sha256": "c20f9cf137532963ea9bacf65c7e010d320cae5406ace2107e4b80bb5b8902af",
   "interactions": [
     {
-      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.",
+      "note": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks.",
       "response": {
         "status": "ok",
         "checked_at": "{{now}}",
         "model": "jev-1.13.0",
-        "input_tokens": 1081,
+        "input_tokens": 1069,
         "results": [
           {
             "medication": "lisinopril",
@@ -21,21 +21,21 @@
             },
             "confidence": 1,
             "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.",
-            "sentence_note": "Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks."
+            "sentence_note": "Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks."
           }
         ],
-        "mentions_hospital_stay": 0.72,
+        "mentions_hospital_stay": 0.68,
         "documents": [
           {
             "title": "Discharge summary",
-            "date": "2026-09-17",
+            "date": "2026-09-23",
             "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
             "source": "DocumentReference/{{documentReferenceId}}"
           },
           {
             "title": "Today's visit note",
-            "date": "2026-09-24",
-            "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.",
+            "date": "2026-09-30",
+            "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks.",
             "source": "ClinicalImpression/{{clinicalImpressionId}}"
           }
         ],
