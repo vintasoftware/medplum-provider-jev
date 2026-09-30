@@ -1,0 +1,9 @@
+scripts:
+  setup: |
+    # Link the local, Git-ignored settings from the main checkout, so the TypeSafe key stays in one file.
+    for f in .env provider/.env.local provider/medplum.config.json; do
+      if [ -e "$ORCA_ROOT_PATH/$f" ] && [ ! -e "$f" ]; then
+        ln -s "$ORCA_ROOT_PATH/$f" "$f"
+      fi
+    done
+    npm --prefix provider ci --ignore-scripts
