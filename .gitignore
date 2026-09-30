@@ -2,14 +2,15 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.defaults
+!.env.example
 artifacts/
 *.pem
 *.key
 
 node_modules/
 dist/
-.env.*.local
-.env.local
 .pytest_cache/
 bot-dist/
 
