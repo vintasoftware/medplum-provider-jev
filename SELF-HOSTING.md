@@ -2,7 +2,7 @@
 
 Instead of TypeSafe's hosted Jev, run the open, Apache-2.0 **frontier-infra/jebadiah-27b** checkpoint on a private Modal GPU Server. This is the path to evaluate when patient data and contractual control matter: Modal documents an Enterprise BAA, and the model and weights stay in your account. [ARTICLE.md](ARTICLE.md) explains the model choice and the HIPAA reasoning.
 
-**Status.** The Server runs Jebadiah's own server, which takes the same `POST /v1/systemone` request the Bot sends to hosted Jev, so the guided demo runs on it with `CONSISTENCY_BACKEND=modal` ([step 5](#5-run-the-guided-demo-on-it)). After an idle period the first check waits on a [cold start of 3–4 minutes](#6-cold-starts-and-warm-up).
+**Status.** The Server runs Jebadiah's own server, which takes the same `POST /v1/systemone` request the Bot sends to hosted Jev, so the guided demo runs on it with `CONSISTENCY_BACKEND=modal` ([step 5](#5-run-the-guided-demo-on-it)). After an idle period the first check waits on a [cold start of usually 3–4 minutes](#6-cold-starts-and-warm-up).
 
 ## What you need
 
@@ -82,7 +82,7 @@ In Medplum Project Admin → Secrets, add the three secrets from step 3 and set 
 
 ## 6. Cold starts and warm-up
 
-Measured from zero containers on September 30, 2026: GPU scheduling and weight loading take 1–1.5 minutes, then a warm-up of about 2 minutes. `/health` answered 200 after **186 s and 223 s** in two runs.
+Measured from zero containers on September 30, 2026: GPU scheduling and weight loading take 1–1.5 minutes, then a warm-up of about 2 minutes. `/health` answered 200 after **186 s and 223 s** in two runs. In a third, reading the weights from the Volume ran at about one file per second and took 14 minutes, so the Server was ready after 1,058 s; the logs show the `Loading weights` progress.
 
 - The model's linear-attention kernels compile on first use for each input shape, which made the first requests take 10–37 s. Start-up therefore sends synthetic requests of 1 and 8 questions at five prompt lengths before the Server takes traffic; the Inference logs show `warm-up: … s` when it ends. The first real request then takes about 2 s.
 - While no container is ready, Modal's proxy answers **503 at once** (empty body); it does not queue the request. One request schedules a container, but requests 20 s apart once saw none for over 80 s, while retrying every 2 s scheduled one at once.
@@ -104,7 +104,7 @@ The remaining miss is `dose-dates-unexplained`: two dated doses with no explanat
 
 ## 8. Cost
 
-Modal lists the A100 80 GB at $2.50/h. With 4 CPU cores, 8 GiB of RAM and the 1.15 US-region multiplier, a warm hour is about **$3.16** before storage. Each cold start plus the five idle minutes is about 9 GPU minutes, around $0.47. These are list-price estimates, not a measured bill. [Pricing](https://modal.com/pricing), [regions](https://modal.com/docs/guide/region-selection).
+Modal lists the A100 80 GB at $2.50/h. With 4 CPU cores, 8 GiB of RAM and the 1.15 US-region multiplier, a warm hour is about **$3.16** before storage. Each cold start plus the five idle minutes is usually about 9 GPU minutes, around $0.47, and about $1.20 when the weights load slowly (step 6). These are list-price estimates, not a measured bill. [Pricing](https://modal.com/pricing), [regions](https://modal.com/docs/guide/region-selection).
 
 To stop paying after a test, run `modal container stop -y <id>` (from `modal container list`). A container stopped within five minutes of the last request is **replaced**, so stop it after that window and list again.
 
