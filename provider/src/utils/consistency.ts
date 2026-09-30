@@ -152,14 +152,13 @@ export function readStoredCheck(issue: DetectedIssue): StoredCheck | undefined {
 /** A versioned reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
 export interface ImplicatedSource {
   reference: string;
-  id: string;
   versionId: string;
 }
 
 function implicatedSource(issue: DetectedIssue, resourceType: string): ImplicatedSource | undefined {
-  const pattern = new RegExp(`^${resourceType}/([^/]+)/_history/([^/]+)$`);
+  const pattern = new RegExp(`^${resourceType}/[^/]+/_history/([^/]+)$`);
   const match = issue.implicated?.map((r) => pattern.exec(r.reference ?? '')).find(Boolean);
-  return match ? { reference: match[0], id: match[1], versionId: match[2] } : undefined;
+  return match ? { reference: match[0], versionId: match[1] } : undefined;
 }
 
 export function implicatedNote(issue: DetectedIssue): ImplicatedSource | undefined {

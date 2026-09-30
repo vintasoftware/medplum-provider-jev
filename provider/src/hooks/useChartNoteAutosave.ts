@@ -10,8 +10,8 @@ export interface ChartNoteAutosave {
   /** Saves the note once typing pauses. */
   save: (note: string) => void;
   /**
-   * Saves text still waiting on the pause, then waits for every save in flight. Rejects when the
-   * text could not be saved, so a check or a signature never uses an older note.
+   * Saves the latest text now and waits for every save in flight. Rejects when the text could not
+   * be saved, so a check or a signature never uses an older note.
    */
   flush: () => Promise<void>;
 }
@@ -23,9 +23,8 @@ export interface ChartNoteAutosaveOptions {
 }
 
 /**
- * Autosaves the chart note of a ClinicalImpression. Saves reach the server in typing order, and
- * text that failed to save stays pending for the next flush.
- *
+ * Autosaves the chart note of a ClinicalImpression. Saves reach the server in typing order. A flush
+ * saves the latest text unless the server already has it, so text that failed to save is saved again.
  * @param clinicalImpression - The note's ClinicalImpression, once loaded.
  * @param options - Save callback and debounce timeout.
  * @returns The save and flush functions.
@@ -36,39 +35,28 @@ export function useChartNoteAutosave(
 ): ChartNoteAutosave {
   const medplum = useMedplum();
   const { onSaved, timeoutMs = SAVE_TIMEOUT_MS } = options;
-  // Text typed since the last save started.
-  const pendingRef = useRef<string | undefined>(undefined);
+  // The text on screen, once typed.
+  const latestRef = useRef<string | undefined>(undefined);
+  // The text the server has. `clinicalImpression` is not refreshed on save, so it is tracked here.
+  const savedRef = useRef<string | undefined>(undefined);
   // Each save starts after the previous one settled.
   const queueRef = useRef<Promise<void>>(Promise.resolve());
-  // Whether the server copy has a note. `clinicalImpression` is not refreshed on save, so this
-  // decides between adding and removing the note when the text is cleared.
-  const noteOnServerRef = useRef<boolean | undefined>(undefined);
 
-  const saveNow = useCallback(
+  const enqueue = useCallback(
     (note: string): Promise<void> => {
-      pendingRef.current = undefined;
       if (!clinicalImpression) {
         return Promise.resolve();
       }
       const save = async (): Promise<void> => {
-        try {
-          if (note) {
-            await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [
-              { op: 'add', path: '/note', value: [{ text: note }] },
-            ]);
-            noteOnServerRef.current = true;
-          } else if (noteOnServerRef.current ?? Boolean(clinicalImpression.note)) {
-            await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [{ op: 'remove', path: '/note' }]);
-            noteOnServerRef.current = false;
-          } else {
-            return;
-          }
-          onSaved?.();
-        } catch (err) {
-          // Newer text, if any, is already pending; otherwise this text is saved again on the next flush.
-          pendingRef.current ??= note;
-          throw err;
+        savedRef.current ??= clinicalImpression.note?.[0]?.text ?? '';
+        if (note === savedRef.current) {
+          return;
         }
+        await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [
+          note ? { op: 'add', path: '/note', value: [{ text: note }] } : { op: 'remove', path: '/note' },
+        ]);
+        savedRef.current = note;
+        onSaved?.();
       };
       // A failed save rejects its own promise without blocking the saves queued after it.
       const queued = queueRef.current.catch(() => undefined).then(save);
@@ -79,24 +67,24 @@ export function useChartNoteAutosave(
   );
 
   const debouncedSave = useDebouncedCallback((note: string): void => {
-    saveNow(note).catch(showErrorNotification);
+    enqueue(note).catch(showErrorNotification);
   }, timeoutMs);
 
   const save = useCallback(
     (note: string): void => {
-      pendingRef.current = note;
+      latestRef.current = note;
       debouncedSave(note);
     },
     [debouncedSave]
   );
 
   const flush = useCallback(async (): Promise<void> => {
-    if (pendingRef.current !== undefined) {
-      debouncedSave.cancel();
-      await saveNow(pendingRef.current);
+    debouncedSave.cancel();
+    if (latestRef.current !== undefined) {
+      await enqueue(latestRef.current);
     }
     await queueRef.current;
-  }, [debouncedSave, saveNow]);
+  }, [debouncedSave, enqueue]);
 
   return { save, flush };
 }

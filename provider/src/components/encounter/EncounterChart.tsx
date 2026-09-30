@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
 import { Box, Button, Card, Group, Stack, Textarea, Title } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
 import type { WithId } from '@medplum/core';
 import { createReference, getReferenceString } from '@medplum/core';
 import type { Encounter, Practitioner, Provenance, Reference, Task } from '@medplum/fhirtypes';
@@ -62,8 +61,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   const [provenances, setProvenances] = useState<Provenance[]>([]);
   const [chartNoteStatus, setChartNoteStatus] = useState(ChartNoteStatus.Unsigned);
   // The Sign dialog opens from the header's lock button, or from the review card with a required reason.
-  const [signOpened, { open: openSign, close: closeSign }] = useDisclosure(false);
-  const [requireSignReason, setRequireSignReason] = useState(false);
+  const [signDialog, setSignDialog] = useState<'sign' | 'reason'>();
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const { save: saveChartNote, flush: flushChartNote } = useChartNoteAutosave(clinicalImpression, {
     onSaved: demo?.refresh,
@@ -202,16 +200,6 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
     noteInputRef.current?.focus();
   };
 
-  const handleOpenSign = (): void => {
-    setRequireSignReason(false);
-    openSign();
-  };
-
-  const handleSignWithReason = (): void => {
-    setRequireSignReason(true);
-    openSign();
-  };
-
   if (!patientResource || !encounter) {
     return <Loading />;
   }
@@ -228,8 +216,10 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
           onStatusChange={handleEncounterStatusChange}
           onTabChange={handleTabChange}
           onSign={handleSign}
-          signDialog={{ opened: signOpened, onOpen: handleOpenSign, onClose: closeSign }}
-          requireSignReason={requireSignReason}
+          signDialogOpened={signDialog !== undefined}
+          onSignDialogOpen={() => setSignDialog('sign')}
+          onSignDialogClose={() => setSignDialog(undefined)}
+          requireSignReason={signDialog === 'reason'}
         />
         <Box p="md">
           {activeTab === 'notes' && (
@@ -271,7 +261,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
                   noteText={currentNote}
                   locked={chartNoteStatus === ChartNoteStatus.SignedAndLocked}
                   onEditNote={handleEditNote}
-                  onSignWithReason={handleSignWithReason}
+                  onSignWithReason={() => setSignDialog('reason')}
                 />
               )}
               {tasks.map((task) => (

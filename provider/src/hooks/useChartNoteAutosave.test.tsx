@@ -138,4 +138,30 @@ describe('useChartNoteAutosave', () => {
       JSON.stringify([{ op: 'add', path: '/note', value: [{ text: 'One two' }] }]),
     ]);
   });
+  test('a failed older save never overwrites newer text', async () => {
+    let failFirst: () => void = () => undefined;
+    const patch = vi.spyOn(medplum, 'patchResource').mockImplementationOnce(
+      () =>
+        new Promise<never>((_, reject) => {
+          failFirst = () => reject(new Error('Network error'));
+        })
+    );
+    const { result } = setup();
+
+    result.current.save('A');
+    const first = result.current.flush();
+    result.current.save('A B');
+    const second = result.current.flush();
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+
+    failFirst();
+    await expect(first).rejects.toThrow('Network error');
+    await second;
+    expect((await medplum.readResource('ClinicalImpression', impression.id)).note?.[0]?.text).toBe('A B');
+
+    // The server already has the latest text, so nothing is saved again.
+    await result.current.flush();
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect((await medplum.readResource('ClinicalImpression', impression.id)).note?.[0]?.text).toBe('A B');
+  });
 });

@@ -94,29 +94,32 @@ export function useConsistencyCheck(
     };
   }, [medplum, encounterId]);
 
-  const issueRef = issue ? getReferenceString(issue) : undefined;
+  const issueReference = issue ? getReferenceString(issue) : undefined;
   useEffect(() => {
-    if (!issueRef) {
+    if (!issueReference) {
       setTask(undefined);
       return;
     }
-    medplum.searchOne('Task', { focus: issueRef }, { cache: 'no-cache' }).then(setTask).catch(showErrorNotification);
-  }, [medplum, issueRef]);
+    medplum
+      .searchOne('Task', { focus: issueReference }, { cache: 'no-cache' })
+      .then(setTask)
+      .catch(showErrorNotification);
+  }, [medplum, issueReference]);
 
   // Re-read the passages from the exact versions the check used. Keyed on those versions, so a
   // mitigation (a new issue object with the same sources) does not reload them.
-  const noteRef = issue ? implicatedNote(issue)?.reference : undefined;
-  const outsideRef = issue ? implicatedDocument(issue)?.reference : undefined;
+  const noteReference = issue ? implicatedNote(issue)?.reference : undefined;
+  const outsideReference = issue ? implicatedDocument(issue)?.reference : undefined;
   useEffect(() => {
     setPassages({ loaded: false });
-    if (!issueRef) {
+    if (!issueReference) {
       return undefined;
     }
     let cancelled = false;
     const load = async (): Promise<CheckedPassages> => {
       const [doc, impression] = await Promise.all([
-        outsideRef ? readCheckedVersion(medplum, 'DocumentReference', outsideRef) : undefined,
-        noteRef ? readCheckedVersion(medplum, 'ClinicalImpression', noteRef) : undefined,
+        outsideReference ? readCheckedVersion(medplum, 'DocumentReference', outsideReference) : undefined,
+        noteReference ? readCheckedVersion(medplum, 'ClinicalImpression', noteReference) : undefined,
       ]);
       const outsideText = doc ? await attachmentText(medplum, doc).catch(() => undefined) : undefined;
       return {
@@ -138,7 +141,7 @@ export function useConsistencyCheck(
     return () => {
       cancelled = true;
     };
-  }, [medplum, issueRef, noteRef, outsideRef]);
+  }, [medplum, issueReference, noteReference, outsideReference]);
 
   const runCheck = useCallback(async (): Promise<void> => {
     if (!encounter || runningRef.current) {

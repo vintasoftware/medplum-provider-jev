@@ -7,7 +7,6 @@ import type { Encounter, Patient, Practitioner, Reference } from '@medplum/fhirt
 import { IconChevronDown, IconLock, IconLockOpen, IconShieldCheck } from '@tabler/icons-react';
 import type { JSX } from 'react';
 import { useState } from 'react';
-import type { ControllableDisclosureProps } from '../../hooks/useControllableDisclosure';
 import { useControllableDisclosure } from '../../hooks/useControllableDisclosure';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
 import { ChartNoteStatus } from '../../types/encounter';
@@ -22,8 +21,10 @@ interface EncounterHeaderProps {
   onTabChange?: (tab: string) => void;
   onSign?: (practitioner: Reference<Practitioner>, lock: boolean, reason?: string) => void;
   onSignLock?: (practitioner: Reference<Practitioner>) => void;
-  /** Optional controlled state of the Sign dialog, so the chart can open it from elsewhere. */
-  signDialog?: ControllableDisclosureProps;
+  /** Controlled state of the Sign dialog, so the chart can open it from elsewhere. */
+  signDialogOpened?: boolean;
+  onSignDialogOpen?: () => void;
+  onSignDialogClose?: () => void;
   /** Ask for a documented reason before the note can be signed. */
   requireSignReason?: boolean;
 }
@@ -36,13 +37,19 @@ export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
     onStatusChange,
     onTabChange,
     onSign,
-    signDialog = {},
+    signDialogOpened,
+    onSignDialogOpen,
+    onSignDialogClose,
     requireSignReason = false,
   } = props;
   const [status, setStatus] = useState<Encounter['status']>(encounter.status);
   const [activeTab, setActiveTab] = useState('notes');
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
-  const [signOpened, { open: openSign, close: closeSign }] = useControllableDisclosure(signDialog);
+  const [signOpened, { open: openSign, close: closeSign }] = useControllableDisclosure({
+    opened: signDialogOpened,
+    onOpen: onSignDialogOpen,
+    onClose: onSignDialogClose,
+  });
   const [insuranceOpened, { open: openInsurance, close: closeInsurance }] = useDisclosure(false);
 
   const handleStatusChange = (newStatus: Encounter['status']): void => {

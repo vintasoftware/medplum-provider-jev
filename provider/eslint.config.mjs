@@ -12,13 +12,8 @@ export default defineConfig(
     rules: { 'header/header': 'off' },
   },
   {
-    // The Bot, the scripts and the Playwright tests are not React code.
-    files: ['bots/**', 'scripts/**', 'e2e/**'],
-    rules: { 'react-hooks/rules-of-hooks': 'off', 'react-refresh/only-export-components': 'off' },
-  },
-  {
-    // Playwright types auto fixtures as `void`.
+    // Playwright fixtures take a `use` callback and type auto fixtures as `void`.
     files: ['e2e/**'],
-    rules: { '@typescript-eslint/no-invalid-void-type': 'off' },
+    rules: { 'react-hooks/rules-of-hooks': 'off', '@typescript-eslint/no-invalid-void-type': 'off' },
   }
 );

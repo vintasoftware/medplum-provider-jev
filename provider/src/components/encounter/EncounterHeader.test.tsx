@@ -446,7 +446,9 @@ describe('EncounterHeader', () => {
     const onClose = vi.fn();
     setup({
       encounter: { ...mockEncounter, status: 'finished' },
-      signDialog: { opened: true, onOpen, onClose },
+      signDialogOpened: true,
+      onSignDialogOpen: onOpen,
+      onSignDialogClose: onClose,
       requireSignReason: true,
     });
     expect(await screen.findByText('Reason for signing despite the consistency check')).toBeInTheDocument();

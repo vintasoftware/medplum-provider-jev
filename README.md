@@ -88,7 +88,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Task | Command |
 | --- | --- |
 | Run the app | `npm --prefix provider run dev` |
-| Redeploy the Bot after changing `provider/bots/consistency.ts` | `npm --prefix provider run deploy:bot` |
+| Redeploy the Bot after changing `provider/bots/consistency.ts` or `provider/src/utils/consistency-review.ts` | `npm --prefix provider run deploy:bot` |
 | Check the project setup again | `npm --prefix provider run setup -- --dry-run` |
 | Rewrite `provider/.env.local` from the root `.env` | `npm --prefix provider run configure` |
 | Unit tests | `npm --prefix provider test -- bots src/components/encounter src/pages/guided-demo scripts` |

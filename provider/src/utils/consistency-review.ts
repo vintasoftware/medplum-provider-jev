@@ -1,5 +1,5 @@
-// Definitions shared by the consistency Bot and the app. Both bundles include this module, so
-// it must stay free of browser and Node specifics.
+// Definitions shared by the consistency Bot and the app. Both bundles include this module, so it
+// must stay free of browser and Node specifics, and a change here needs `npm --prefix provider run deploy:bot`.
 import contract from '../data/model-contract.json' with { type: 'json' };
 
 export type ReviewLabel = (typeof contract.labels)[number];
