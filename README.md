@@ -19,6 +19,7 @@ You need:
 
 - **Node** `^22.18.0` or `>=24.2.0` (it runs the TypeScript scripts directly).
 - A **Medplum project with Bots enabled** at [app.medplum.com](https://app.medplum.com), where you are an administrator. Use a project for synthetic data only: every run creates a new synthetic patient. Ask Medplum's support for Bots if you're not a paying customer yet.
+- **Medplum's terminology** set up for that project. The Bot looks up each active medication's RxNorm code with `CodeSystem/$lookup` to find its ingredients. RxNorm is one of Medplum's hosted default terminologies; if the check below fails, ask Medplum's support to set up terminology for your project and mention that the RxNorm code system is needed, not only its value sets. After logging in (step 2 below), `npx --prefix provider medplum get 'CodeSystem/$lookup?system=http://www.nlm.nih.gov/research/umls/rxnorm&code=314076'` should return "lisinopril 10 MG Oral Tablet".
 - A **TypeSafe API key**.
 
 From the repository root:
@@ -172,6 +173,8 @@ Add `TYPESAFE_API_KEY` and `CONSISTENCY_BACKEND=typesafe` as ordinary string sec
 | Card: Missing string project secret: TYPESAFE_API_KEY | Rerun setup; it adds missing secrets |
 | Card: The model service rejected the project credentials | Replace `TYPESAFE_API_KEY` in Project Admin → Secrets |
 | Card: No chart note has been saved for this visit yet | Type the note, then press Check note |
+| Card: Medication terminology is unavailable; retry later | Run the RxNorm `$lookup` check under [Quick start](#quick-start). `CodeSystem … not found` means the project cannot see RxNorm: ask Medplum's support to set up terminology for the project |
+| Card: An active RxNorm concept has no supported ingredient resolution | An active medication is coded as a concept the Bot cannot map to ingredients, such as a bare brand name; code it as a clinical or branded drug (SCD/SBD) |
 | Card: No outside discharge summary is on file | Use Start scenario; the check needs a current LOINC 18842-5 DocumentReference with `text/plain` content |
 | Card: The self-hosted model … | `CONSISTENCY_BACKEND` is `modal`; see the troubleshooting table in [SELF-HOSTING.md](SELF-HOSTING.md) |
 | e2e: `recorded with different Bot questions` | Re-record: `E2E_RECORD=1 npm --prefix provider run test:e2e` |
