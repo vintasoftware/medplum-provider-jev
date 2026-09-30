@@ -6,7 +6,9 @@ import { formatDate, formatHumanName } from '@medplum/core';
 import type { Encounter, Patient, Practitioner, Reference } from '@medplum/fhirtypes';
 import { IconChevronDown, IconLock, IconLockOpen, IconShieldCheck } from '@tabler/icons-react';
 import type { JSX } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import type { ControllableDisclosureProps } from '../../hooks/useControllableDisclosure';
+import { useControllableDisclosure } from '../../hooks/useControllableDisclosure';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
 import { ChartNoteStatus } from '../../types/encounter';
 import { EncounterCoverageEligibilityModal } from './EncounterCoverageEligibilityModal';
@@ -20,8 +22,10 @@ interface EncounterHeaderProps {
   onTabChange?: (tab: string) => void;
   onSign?: (practitioner: Reference<Practitioner>, lock: boolean, reason?: string) => void;
   onSignLock?: (practitioner: Reference<Practitioner>) => void;
-  /** Raising this opens the Sign dialog with a required reason field. */
-  signReasonRequest?: number;
+  /** Optional controlled state of the Sign dialog, so the chart can open it from elsewhere. */
+  signDialog?: ControllableDisclosureProps;
+  /** Ask for a documented reason before the note can be signed. */
+  requireSignReason?: boolean;
 }
 
 export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
@@ -32,23 +36,14 @@ export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
     onStatusChange,
     onTabChange,
     onSign,
-    signReasonRequest = 0,
+    signDialog = {},
+    requireSignReason = false,
   } = props;
   const [status, setStatus] = useState<Encounter['status']>(encounter.status);
   const [activeTab, setActiveTab] = useState('notes');
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
-  const [signOpened, { open: openSign, close: closeSign }] = useDisclosure(false);
+  const [signOpened, { open: openSign, close: closeSign }] = useControllableDisclosure(signDialog);
   const [insuranceOpened, { open: openInsurance, close: closeInsurance }] = useDisclosure(false);
-  const [requireReason, setRequireReason] = useState(false);
-  const handledReasonRequest = useRef(signReasonRequest);
-
-  useEffect(() => {
-    if (signReasonRequest !== handledReasonRequest.current) {
-      handledReasonRequest.current = signReasonRequest;
-      setRequireReason(true);
-      openSign();
-    }
-  }, [signReasonRequest, openSign]);
 
   const handleStatusChange = (newStatus: Encounter['status']): void => {
     if (newStatus === 'cancelled') {
@@ -68,11 +63,6 @@ export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
 
   const onConfirmSign = (practitioner: Reference<Practitioner>, lock: boolean, reason?: string): void => {
     onSign?.(practitioner, lock, reason);
-    handleCloseSign();
-  };
-
-  const handleCloseSign = (): void => {
-    setRequireReason(false);
     closeSign();
   };
 
@@ -85,7 +75,6 @@ export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
     if (chartNoteStatus === ChartNoteStatus.SignedAndLocked) {
       return;
     }
-    setRequireReason(false);
     openSign();
   };
 
@@ -251,8 +240,8 @@ export const EncounterHeader = (props: EncounterHeaderProps): JSX.Element => {
         </Group>
       </Modal>
 
-      <Modal opened={signOpened} onClose={handleCloseSign} title="Signing As">
-        <SignLockDialog onSign={onConfirmSign} requireReason={requireReason} />
+      <Modal opened={signOpened} onClose={closeSign} title="Signing As">
+        <SignLockDialog onSign={onConfirmSign} requireReason={requireSignReason} />
       </Modal>
 
       {patientSubject && (
