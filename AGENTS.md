@@ -19,6 +19,12 @@ All data here is synthetic. Keep document text, secrets and model response bodie
 - `MedplumClient` retries a failed fetch at once, up to twice. Aborting a routed Bot request therefore runs the Bot again.
 - The guided demo seeds dates relative to today (the discharge summary is 7 days old). Keep fixture note text free of dates. `measure-cases.json` pins its own dates, so `measure` cannot catch a date mismatch in the live demo.
 
+## Browser checks
+
+- Drive a manual run of the demo with Playwright's headless Chromium (`provider/` already has `@playwright/test`), not Orca's embedded browser. Orca slows its browser to about 2 frames per second while the pane is off screen, so Mantine dialogs freeze mid-animation and clicks by position are lost.
+- Sign the app in the way `provider/e2e/fixtures.ts` does: write the CLI session to localStorage `activeLogin` in an init script. Never print the token.
+- While a tutorial tip is showing, the first click outside its highlight only hides the tip. Hide the tutorial first, or click the highlighted control.
+
 ## Modal
 
 - Stage with `HUGGING_FACE_TOKEN` set; deploy with `env -u HUGGING_FACE_TOKEN modal deploy -m demo.modal_app`, so the token stays out of the app.
