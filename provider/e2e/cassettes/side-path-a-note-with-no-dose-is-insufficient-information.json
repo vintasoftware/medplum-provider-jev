@@ -38,7 +38,8 @@
             "source": "ClinicalImpression/{{clinicalImpressionId}}"
           }
         ],
-        "note_version": "{{noteVersion}}"
+        "note_version": "{{noteVersion}}",
+        "outside_version": "{{documentVersion}}"
       }
     }
   ]

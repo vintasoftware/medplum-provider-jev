@@ -111,12 +111,13 @@ export async function readScenarioState(medplum: MedplumClient, encounterId: str
     noteVersion: impression?.meta?.versionId,
     checks: (issues as WithId<DetectedIssue>[]).flatMap((issue) => {
       const headline = headlineResult(readStoredCheck(issue)?.results ?? []);
-      return headline
+      const note = implicatedNote(issue);
+      return headline && note
         ? [
             {
               id: issue.id,
               choice: headline.choice,
-              noteVersion: implicatedNote(issue)?.versionId,
+              noteVersion: note.versionId,
               mitigated: (issue.mitigation?.length ?? 0) > 0,
             },
           ]

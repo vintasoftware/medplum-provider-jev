@@ -945,7 +945,10 @@ describe('EncounterChart', () => {
         status: 'preliminary',
         code: { coding: [{ system: CHECK_CODE_SYSTEM, code: CHECK_CODE }] },
         patient: { reference: `Patient/${HomerSimpson.id}` },
-        implicated: [createReference(finished), { reference: `ClinicalImpression/${impression.id}` }],
+        implicated: [
+          createReference(finished),
+          { reference: `ClinicalImpression/${impression.id}/_history/${impression.meta?.versionId}` },
+        ],
         extension: [
           {
             url: CHECK_RESULT_EXTENSION,

@@ -193,13 +193,12 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
       return undefined;
     }
     let cancelled = false;
-    const checkedAt = readStoredCheck(issue)?.checked_at ?? '';
     const load = async (): Promise<Passages> => {
       const docSource = implicatedDocument(issue);
       const noteSource = implicatedNote(issue);
       const [doc, impression] = await Promise.all([
-        docSource ? readCheckedVersion(medplum, 'DocumentReference', docSource, checkedAt) : undefined,
-        noteSource ? readCheckedVersion(medplum, 'ClinicalImpression', noteSource, checkedAt) : undefined,
+        docSource ? readCheckedVersion(medplum, 'DocumentReference', docSource) : undefined,
+        noteSource ? readCheckedVersion(medplum, 'ClinicalImpression', noteSource) : undefined,
       ]);
       const outsideText = doc ? await attachmentText(medplum, doc).catch(() => undefined) : undefined;
       return {

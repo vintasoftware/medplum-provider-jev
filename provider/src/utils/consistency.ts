@@ -9,7 +9,6 @@ import type {
   Patient,
   Practitioner,
   Reference,
-  Resource,
 } from '@medplum/fhirtypes';
 import type { ReviewOutput, ReviewResult } from '../../bots/consistency';
 import { noteSearch, splitSentences } from '../../bots/consistency';
@@ -109,10 +108,8 @@ export function buildDetectedIssue(
       sentence_note_index: sentenceIndex(note.text, sentence_note),
     })),
   };
-  const noteReference = review.note_version ? `${note.source}/_history/${review.note_version}` : note.source;
-  const outsideReference = review.outside_version
-    ? `${outside.source}/_history/${review.outside_version}`
-    : outside.source;
+  const noteReference = `${note.source}/_history/${review.note_version}`;
+  const outsideReference = `${outside.source}/_history/${review.outside_version}`;
   return {
     resourceType: 'DetectedIssue',
     status: 'preliminary',
@@ -155,14 +152,14 @@ export function readStoredCheck(issue: DetectedIssue): StoredCheck | undefined {
   }
 }
 
-/** A versioned or plain reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
+/** A versioned reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
 export interface ImplicatedSource {
   id: string;
-  versionId?: string;
+  versionId: string;
 }
 
 function implicatedSource(issue: DetectedIssue, resourceType: string): ImplicatedSource | undefined {
-  const pattern = new RegExp(`^${resourceType}/([^/]+)(?:/_history/([^/]+))?$`);
+  const pattern = new RegExp(`^${resourceType}/([^/]+)/_history/([^/]+)$`);
   const match = issue.implicated?.map((r) => pattern.exec(r.reference ?? '')).find(Boolean);
   return match ? { id: match[1], versionId: match[2] } : undefined;
 }
@@ -175,24 +172,14 @@ export function implicatedDocument(issue: DetectedIssue): ImplicatedSource | und
   return implicatedSource(issue, 'DocumentReference');
 }
 
-/**
- * The version of a source that a check read, or undefined when it cannot be loaded. Checks stored
- * before versioned discharge-summary references point at the current resource; that is the
- * checked version only if it has not changed since `checkedAt`.
- */
+/** The version of a source that a check read, or undefined when it cannot be loaded. */
 export async function readCheckedVersion<K extends 'ClinicalImpression' | 'DocumentReference'>(
   medplum: MedplumClient,
   resourceType: K,
-  source: ImplicatedSource,
-  checkedAt: string
+  source: ImplicatedSource
 ): Promise<ExtractResource<K> | undefined> {
   try {
-    if (source.versionId) {
-      return await medplum.readVersion(resourceType, source.id, source.versionId);
-    }
-    const current = await medplum.readResource(resourceType, source.id, { cache: 'no-cache' });
-    const updated = Date.parse((current as Resource).meta?.lastUpdated ?? '');
-    return updated <= Date.parse(checkedAt) ? current : undefined;
+    return await medplum.readVersion(resourceType, source.id, source.versionId);
   } catch {
     return undefined;
   }

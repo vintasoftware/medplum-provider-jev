@@ -16,7 +16,7 @@ export interface ScenarioState {
   checks: {
     id: string;
     choice: ReviewLabel;
-    noteVersion?: string;
+    noteVersion: string;
     mitigated: boolean;
   }[];
   signed: boolean;
@@ -63,9 +63,7 @@ const firstIsAgreement = (s: ScenarioState): boolean => firstCheck(s)?.choice ==
 
 /** The note was edited after a flagged check, or the note was checked again since. */
 export function editedAfterFlag(s: ScenarioState): boolean {
-  return flaggedChecks(s).some(
-    (c) => (c.noteVersion !== undefined && c.noteVersion !== s.noteVersion) || s.checks[0] !== c
-  );
+  return flaggedChecks(s).some((c) => c.noteVersion !== s.noteVersion || s.checks[0] !== c);
 }
 
 /** The provider acted on a flagged check: edited the note or chose a disposition. */

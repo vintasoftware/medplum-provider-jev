@@ -36,9 +36,9 @@ export interface Cassette {
 
 interface ChartIds {
   documentReferenceId: string;
-  documentVersion: string | undefined;
+  documentVersion: string;
   clinicalImpressionId: string;
-  noteVersion: string | undefined;
+  noteVersion: string;
   noteText: string;
 }
 
@@ -93,8 +93,8 @@ function fill(response: Ok, ids: ChartIds): Ok {
       .replaceAll('{{now}}', new Date().toISOString())
       .replaceAll('{{documentReferenceId}}', ids.documentReferenceId)
       .replaceAll('{{clinicalImpressionId}}', ids.clinicalImpressionId)
-      .replaceAll('"{{noteVersion}}"', ids.noteVersion ? JSON.stringify(ids.noteVersion) : 'null')
-      .replaceAll('"{{documentVersion}}"', ids.documentVersion ? JSON.stringify(ids.documentVersion) : 'null')
+      .replaceAll('{{noteVersion}}', ids.noteVersion)
+      .replaceAll('{{documentVersion}}', ids.documentVersion)
   );
 }
 

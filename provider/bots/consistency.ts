@@ -48,9 +48,8 @@ export type ReviewOutput =
       results: ReviewResult[];
       mentions_hospital_stay: number;
       documents: { title: string; date: string; text: string; source: string }[];
-      note_version: string | undefined;
-      /** Version of the discharge summary that was checked. Missing in Bot responses before it was added. */
-      outside_version?: string;
+      note_version: string;
+      outside_version: string;
     }
   | { status: 'unavailable'; reason: string };
 
@@ -170,8 +169,8 @@ async function readChart(
   outside: SourceDocument;
   note: SourceDocument;
   sources: string[];
-  noteVersion?: string;
-  outsideVersion?: string;
+  noteVersion: string;
+  outsideVersion: string;
 }> {
   let encounter: Encounter;
   try {
@@ -223,8 +222,9 @@ async function readChart(
     outside,
     note,
     sources: [`DocumentReference/${summary.id}`, `ClinicalImpression/${impression.id}`],
-    noteVersion: impression.meta?.versionId,
-    outsideVersion: summary.meta?.versionId,
+    // The server versions every resource it returns.
+    noteVersion: impression.meta?.versionId as string,
+    outsideVersion: summary.meta?.versionId as string,
   };
 }
 
