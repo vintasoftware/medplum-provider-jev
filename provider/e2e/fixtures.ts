@@ -91,7 +91,7 @@ export async function setVisitStatus(page: Page, status: 'In Progress' | 'Finish
   await page.getByRole('menuitem', { name: status }).click();
 }
 
-/** Replaces the note and waits until the server has the new text. */
+// Replaces the note and waits until the server has the new text.
 export async function writeNote(page: Page, text: string): Promise<void> {
   const saved = page.waitForResponse(
     (r) => r.request().method() === 'PATCH' && r.url().includes('/ClinicalImpression/') && r.ok(),
@@ -131,7 +131,7 @@ export async function fhirSearch<T = any>(medplum: APIRequestContext, query: str
   return ((await response.json()).entry ?? []).map((e: { resource: T }) => e.resource);
 }
 
-/** A pause so the recorded video shows each state; it does not affect assertions. */
+// A pause so the recorded video shows each state; it does not affect assertions.
 export async function beat(page: Page, ms = 1200): Promise<void> {
   await page.waitForTimeout(ms);
 }

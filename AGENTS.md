@@ -8,7 +8,7 @@ All data here is synthetic. Keep document text, secrets and model response bodie
 
 - The CLI session expires within minutes to hours. Run `npx --prefix provider medplum whoami` before any Medplum step, and ask the user to log in when it fails.
 - The e2e tests need a **Practitioner** login. When the default CLI login is a ClientApplication, run them with `E2E_MEDPLUM_PROFILE=<practitioner profile>` and pass `-p <profile>` to other CLI calls.
-- Project secrets take effect without a Bot redeploy; a change to `provider/bots/` needs `npm --prefix provider run deploy:bot`.
+- Project secrets take effect without a Bot redeploy; a change to `provider/bots/` or `provider/src/utils/consistency-review.ts` needs `npm --prefix provider run deploy:bot`.
 - Change project secrets with a JSON patch that starts with a `test` op on the current value. Write the patch file to the scratchpad with `umask 077`, delete it afterwards, and print secret names only. Put `CONSISTENCY_BACKEND` back to `typesafe` after any Modal test.
 
 ## e2e tests

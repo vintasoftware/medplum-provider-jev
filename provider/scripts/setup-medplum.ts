@@ -29,7 +29,11 @@ const BOT_CONFIG = { name: BOT_NAME, source: 'bots/consistency.ts', dist: 'bot-d
 
 export class SetupError extends Error {}
 
-/** JSON with sorted object keys, so comparisons ignore key order. */
+/**
+ * JSON with sorted object keys, so comparisons ignore key order.
+ * @param value - Any JSON value.
+ * @returns The canonical JSON text.
+ */
 export function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, v) =>
     v && typeof v === 'object' && !Array.isArray(v)
@@ -70,7 +74,7 @@ export class Setup {
     this.log(`  ok    ${text}`);
   }
 
-  /** Reports a change; returns whether to make it. */
+  // Reports a change; returns whether to make it.
   change(text: string): boolean {
     this.log(`  ${this.apply ? 'do   ' : 'would'} ${text}`);
     return this.apply;
@@ -95,10 +99,10 @@ export class Setup {
     if (bot) {
       this.ok(`Bot ${BOT_NAME} exists (${bot.id})`);
     } else if (this.change(`create Bot ${BOT_NAME}`)) {
-      const created = (await this.medplum.post(`admin/projects/${this.projectId}/bot`, {
+      const created = await this.medplum.post(`admin/projects/${this.projectId}/bot`, {
         name: BOT_NAME,
         description: 'Guided demo consistency check',
-      })) as Bot;
+      });
       bot = await this.medplum.readResource('Bot', created.id as string);
     } else {
       return undefined;
@@ -222,7 +226,16 @@ export class Setup {
   }
 }
 
-/** Writes the public settings to root .env (other lines untouched), then provider/.env.local. */
+/**
+ * Writes the public settings to root .env (other lines untouched), then provider/.env.local.
+ * @param values - The settings to write.
+ * @param values.baseUrl - The Medplum server.
+ * @param values.projectId - The project.
+ * @param values.botId - The consistency Bot, once created.
+ * @param apply - False for a dry run.
+ * @param log - Where to report each step.
+ * @param root - The repository root.
+ */
 export function updateEnv(
   values: { baseUrl: string; projectId: string; botId?: string },
   apply: boolean,
@@ -263,7 +276,11 @@ function runCli(args: string[], profile?: string): string {
   }
 }
 
-/** Server, project and user of the CLI login. */
+/**
+ * Server, project and user of the CLI login.
+ * @param output - The output of `medplum whoami`.
+ * @returns The login details.
+ */
 export function parseWhoami(output: string): { baseUrl: string; projectId: string; user: string } {
   const server = /Server:\s*(\S+)/.exec(output);
   const project = /Project:.*\(Project\/([A-Za-z0-9-]+)\)/.exec(output);

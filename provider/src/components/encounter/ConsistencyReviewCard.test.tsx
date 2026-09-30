@@ -1,354 +1,216 @@
 import { MantineProvider } from '@mantine/core';
 import type { WithId } from '@medplum/core';
-import { createReference } from '@medplum/core';
-import type {
-  ClinicalImpression,
-  DetectedIssue,
-  DocumentReference,
-  Encounter,
-  Patient,
-  Task,
-} from '@medplum/fhirtypes';
+import type { DetectedIssue, Encounter, Task } from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { MedplumProvider } from '@medplum/react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { JSX } from 'react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import scenario from '../../data/guided-scenario.json';
-import type { ReviewOutput } from '../../utils/consistency';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, splitSentences } from '../../utils/consistency';
+import type { CheckedPassages, ConsistencyCheck } from '../../hooks/useConsistencyCheck';
+import { buildDetectedIssue } from '../../utils/consistency';
+import type { ReviewResult, ReviewSuccess } from '../../utils/consistency-review';
+import { splitSentences } from '../../utils/consistency-review';
 import type { ConsistencyReviewCardProps } from './ConsistencyReviewCard';
 import { ConsistencyReviewCard } from './ConsistencyReviewCard';
 
 const NOTE = scenario.variants[0].note;
-let medplum: MockClient;
-let patient: WithId<Patient>;
-let encounter: WithId<Encounter>;
-let impression: WithId<ClinicalImpression>;
-let summary: WithId<DocumentReference>;
+const OUTSIDE_SENTENCE = splitSentences(scenario.discharge_summary)[2];
+const NOTE_SENTENCE = 'Plan: continue lisinopril 10 mg daily.';
+const BADGE = { selector: '.mantine-Badge-label' };
 
-function botResult(overrides: Partial<Extract<ReviewOutput, { status: 'ok' }>> = {}): ReviewOutput {
-  return {
+const encounter: WithId<Encounter> = {
+  resourceType: 'Encounter',
+  id: 'enc-1',
+  status: 'finished',
+  class: { code: 'AMB' },
+  subject: { reference: 'Patient/p1' },
+};
+
+const CONFLICT: ReviewResult = {
+  medication: 'lisinopril',
+  choice: 'potential_conflict',
+  probabilities: { agreement: 0.02, potential_conflict: 0.97, insufficient_information: 0.01 },
+  confidence: 0.95,
+  sentence_outside: OUTSIDE_SENTENCE,
+  sentence_note: NOTE_SENTENCE,
+};
+
+function makeIssue(result: ReviewResult = CONFLICT, mitigation?: DetectedIssue['mitigation']): WithId<DetectedIssue> {
+  const review: ReviewSuccess = {
     status: 'ok',
     checked_at: '2026-09-23T15:00:00.000Z',
     model: 'jev-1.13.0',
     input_tokens: 900,
     mentions_hospital_stay: 0.1,
-    note_version: impression.meta?.versionId as string,
-    outside_version: summary.meta?.versionId as string,
-    results: [
-      {
-        medication: 'lisinopril',
-        choice: 'potential_conflict',
-        probabilities: { agreement: 0.02, potential_conflict: 0.97, insufficient_information: 0.01 },
-        confidence: 0.95,
-        sentence_outside: splitSentences(scenario.discharge_summary)[2],
-        sentence_note: 'Plan: continue lisinopril 10 mg daily.',
-      },
-    ],
+    note_version: '1',
+    outside_version: '1',
+    results: [result],
     documents: [
       {
         title: 'Discharge summary',
         date: '2026-09-16',
         text: scenario.discharge_summary,
-        source: `DocumentReference/${summary.id}`,
+        source: 'DocumentReference/d1',
       },
-      { title: "Today's visit note", date: '2026-09-23', text: NOTE, source: `ClinicalImpression/${impression.id}` },
+      { title: "Today's visit note", date: '2026-09-23', text: NOTE, source: 'ClinicalImpression/ci1' },
     ],
+  };
+  const issue = buildDetectedIssue(review, { reference: 'Patient/p1' }, encounter, { reference: 'Practitioner/pr1' });
+  return { ...issue, id: 'issue-1', mitigation };
+}
+
+const LOADED: CheckedPassages = {
+  loaded: true,
+  outside: { title: 'Discharge summary', date: '2026-09-16T12:00:00Z', text: scenario.discharge_summary },
+  note: NOTE,
+};
+
+function makeCheck(overrides: Partial<ConsistencyCheck> = {}): ConsistencyCheck {
+  return {
+    issue: makeIssue(),
+    passages: LOADED,
+    task: undefined,
+    running: false,
+    error: undefined,
+    creatingTask: false,
+    runCheck: vi.fn(async () => undefined),
+    createTask: vi.fn(async () => undefined),
+    markSignedWithReason: vi.fn(async () => undefined),
     ...overrides,
   };
 }
 
-const BADGE = { selector: '.mantine-Badge-label' };
-
 function setup(props: Partial<ConsistencyReviewCardProps> = {}): {
-  rerender: (next: Partial<ConsistencyReviewCardProps>) => void;
-  handlers: Record<string, ReturnType<typeof vi.fn>>;
+  container: HTMLElement;
+  handlers: { onEditNote: ReturnType<typeof vi.fn>; onSignWithReason: ReturnType<typeof vi.fn> };
 } {
-  const handlers = {
-    beforeCheck: vi.fn(async () => undefined),
-    onEditNote: vi.fn(),
-    onSignWithReason: vi.fn(),
-    onIssueChange: vi.fn(),
-  };
-  const element = (extra: Partial<ConsistencyReviewCardProps>): JSX.Element => (
+  const handlers = { onEditNote: vi.fn(), onSignWithReason: vi.fn() };
+  const { container } = render(
     <MemoryRouter>
-      <MedplumProvider medplum={medplum}>
+      <MedplumProvider medplum={new MockClient()}>
         <MantineProvider>
-          <ConsistencyReviewCard
-            encounter={encounter}
-            patient={createReference(patient)}
-            noteText={NOTE}
-            requestSeq={0}
-            locked={false}
-            {...handlers}
-            {...props}
-            {...extra}
-          />
+          <ConsistencyReviewCard check={makeCheck()} noteText={NOTE} locked={false} {...handlers} {...props} />
         </MantineProvider>
       </MedplumProvider>
     </MemoryRouter>
   );
-  const view = render(element({}));
-  return { rerender: (next) => view.rerender(element(next)), handlers };
+  return { container, handlers };
 }
 
-beforeEach(async () => {
-  vi.stubEnv('MEDPLUM_CONSISTENCY_BOT_ID', 'bot-1');
-  vi.stubEnv('MEDPLUM_PROJECT_ID', 'demo-project');
-  medplum = new MockClient();
-  vi.spyOn(medplum, 'getProject').mockReturnValue({ resourceType: 'Project', id: 'demo-project' });
-  patient = await medplum.createResource<Patient>({ resourceType: 'Patient', name: [{ family: 'Demo' }] });
-  encounter = await medplum.createResource<Encounter>({
-    resourceType: 'Encounter',
-    status: 'finished',
-    class: { code: 'AMB' },
-    subject: createReference(patient),
-  });
-  impression = await medplum.createResource<ClinicalImpression>({
-    resourceType: 'ClinicalImpression',
-    status: 'in-progress',
-    subject: createReference(patient),
-    encounter: createReference(encounter),
-    note: [{ text: NOTE }],
-  });
-  summary = await medplum.createResource<DocumentReference>({
-    resourceType: 'DocumentReference',
-    status: 'current',
-    subject: createReference(patient),
-    date: '2026-09-16T12:00:00Z',
-    description: 'Discharge summary',
-    content: [{ attachment: { contentType: 'text/plain', data: btoa(scenario.discharge_summary) } }],
-  });
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.restoreAllMocks();
-});
-
 describe('ConsistencyReviewCard', () => {
-  test('runs once when the chart raises the request number, never on mount', async () => {
-    const execute = vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender, handlers } = setup();
-    await act(async () => undefined);
-    expect(execute).not.toHaveBeenCalled();
-
-    rerender({ requestSeq: 1 });
-    expect(await screen.findByText('Potential conflict', BADGE)).toBeInTheDocument();
-    expect(handlers.beforeCheck).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledWith(
-      'bot-1',
-      { action: 'review_encounter', encounter_id: encounter.id },
-      'application/json'
-    );
-    expect(handlers.beforeCheck.mock.invocationCallOrder[0]).toBeLessThan(execute.mock.invocationCallOrder[0]);
-
-    // A re-render with the same number does not run again.
-    rerender({ requestSeq: 1 });
-    await act(async () => undefined);
-    expect(execute).toHaveBeenCalledTimes(1);
-
-    expect(screen.getByText(/disagree about lisinopril/)).toBeInTheDocument();
-    expect(screen.getByText('Plan: continue lisinopril 10 mg daily.').tagName).toBe('MARK');
-    const issues = await medplum.searchResources('DetectedIssue', { patient: `Patient/${patient.id}` });
-    expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatchObject({
-      status: 'preliminary',
-      patient: { reference: `Patient/${patient.id}` },
-      code: { coding: [{ system: CHECK_CODE_SYSTEM, code: CHECK_CODE }] },
-    });
-    expect(issues[0].implicated?.map((r) => r.reference)).toEqual([
-      `Encounter/${encounter.id}`,
-      `ClinicalImpression/${impression.id}/_history/${impression.meta?.versionId}`,
-      `DocumentReference/${summary.id}/_history/${summary.meta?.versionId}`,
-    ]);
-    // The stored result holds no chart text.
-    expect(JSON.stringify(issues[0])).not.toContain('lisinopril 10 mg daily');
+  test('shows the label, the summary and the highlighted sentences', () => {
+    setup();
+    expect(screen.getByText('Potential conflict', BADGE)).toBeInTheDocument();
+    expect(screen.getByText(/disagree about lisinopril/)).toHaveTextContent('does not mention the hospital stay');
+    expect(screen.getByText(OUTSIDE_SENTENCE).tagName).toBe('MARK');
+    expect(screen.getByText(NOTE_SENTENCE).tagName).toBe('MARK');
+    expect(screen.getByText(/Advisory only/)).toBeInTheDocument();
   });
 
-  test('explains a label set by the no-dose rule and keeps the model scores', async () => {
-    const [result] = (botResult() as Extract<ReviewOutput, { status: 'ok' }>).results;
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(
-      botResult({
-        results: [
-          {
-            ...result,
-            choice: 'insufficient_information',
-            probabilities: { agreement: 0.78, potential_conflict: 0.02, insufficient_information: 0.2 },
-            sentence_note: undefined,
-            label_rule: 'no_dose_sentence',
-          },
-        ],
-      })
-    );
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByText('Insufficient information', BADGE);
+  test('explains a label set by the no-dose rule and shows the model scores', async () => {
+    setup({
+      check: makeCheck({
+        issue: makeIssue({
+          ...CONFLICT,
+          choice: 'insufficient_information',
+          probabilities: { agreement: 0.78, potential_conflict: 0.02, insufficient_information: 0.2 },
+          sentence_note: undefined,
+          label_rule: 'no_dose_sentence',
+        }),
+      }),
+    });
+    expect(screen.getByText('Insufficient information', BADGE)).toBeInTheDocument();
+    expect(screen.getByText(/The dose is missing, not necessarily wrong/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Details' }));
-    expect(await screen.findByText(/Label set by rule/)).toBeInTheDocument();
+    expect(screen.getByText(/Label set by rule/)).toBeInTheDocument();
     expect(screen.getByText('78.0%')).toBeInTheDocument();
-    const [issue] = await medplum.searchResources('DetectedIssue', { patient: `Patient/${patient.id}` });
-    expect(issue.detail).toContain('label set by rule');
+    expect(screen.getByText(/model jev-1.13.0/)).toHaveTextContent('900 input tokens');
   });
 
-  test('loads the newest stored check without calling the Bot', async () => {
-    const execute = vi.spyOn(medplum, 'executeBot');
-    vi.spyOn(medplum, 'executeBot').mockResolvedValueOnce(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByText('Potential conflict', BADGE);
-    execute.mockClear();
-
-    setup();
-    await waitFor(() => expect(screen.getAllByText('Potential conflict', BADGE)).toHaveLength(2));
-    expect(execute).not.toHaveBeenCalled();
+  test('marks the check stale when the note text changed since it', () => {
+    setup({ noteText: `${NOTE} Continue 20 mg.` });
+    expect(screen.getByText('Note changed since this check')).toBeInTheDocument();
+    // The card keeps showing the text that was checked.
+    expect(screen.getByText(NOTE_SENTENCE)).toBeInTheDocument();
+    expect(screen.getByText(/as checked/)).toBeInTheDocument();
   });
 
-  test('reloads a Binary-URL discharge summary at the version that was checked', async () => {
-    const texts: Record<string, string> = {
-      'Binary/original': scenario.discharge_summary,
-      'Binary/revised': 'A revised summary that was never checked.',
-    };
-    const download = vi
-      .spyOn(medplum, 'download')
-      .mockImplementation(async (url) => new Blob([texts[url as string] ?? '']));
-    summary = await medplum.updateResource<DocumentReference>({
-      ...summary,
-      content: [{ attachment: { contentType: 'text/plain', url: 'Binary/original' } }],
-    });
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByText('Potential conflict', BADGE);
-    const outsideSentence = splitSentences(scenario.discharge_summary)[2];
-    expect((await screen.findByText(outsideSentence)).tagName).toBe('MARK');
-
-    // The document changes after the check; a reload still shows what was checked.
-    await medplum.updateResource<DocumentReference>({
-      ...summary,
-      content: [{ attachment: { contentType: 'text/plain', url: 'Binary/revised' } }],
-    });
-    const readVersion = vi.spyOn(medplum, 'readVersion');
-    download.mockClear();
-    setup();
-    await waitFor(() => expect(screen.getAllByText(outsideSentence)).toHaveLength(2));
-    expect(readVersion).toHaveBeenCalledWith('DocumentReference', summary.id, summary.meta?.versionId);
-    expect(download).toHaveBeenCalledWith('Binary/original');
-    expect(download).not.toHaveBeenCalledWith('Binary/revised');
-    expect(screen.queryByText(/revised summary/)).not.toBeInTheDocument();
-  });
-
-  test('marks the check stale when the note changed after it', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByText('Potential conflict', BADGE);
-    expect(screen.queryByText('Note changed since this check')).not.toBeInTheDocument();
-    rerender({ requestSeq: 1, noteText: `${NOTE} Continue 20 mg.` });
-    expect(await screen.findByText('Note changed since this check')).toBeInTheDocument();
-  });
-
-  test('a new note version with the same text, as after Sign & Lock, is not stale', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByText('Potential conflict', BADGE);
-    // Sign & Lock sets ClinicalImpression.status to completed, which saves a new version.
-    await medplum.updateResource({ ...impression, status: 'completed' });
-    rerender({ requestSeq: 1, locked: true });
-    await act(async () => undefined);
+  test('is not stale while the text is unchanged', () => {
+    setup({ noteText: `  ${NOTE}\n` });
     expect(screen.queryByText('Note changed since this check')).not.toBeInTheDocument();
   });
 
-  test('creates a reconciliation task that survives Sign & Lock', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await userEvent.click(await screen.findByRole('button', { name: 'Create reconciliation task' }));
-    await waitFor(async () =>
-      expect(await medplum.searchResources('Task', { patient: `Patient/${patient.id}` })).toHaveLength(1)
-    );
-    const [task] = (await medplum.searchResources('Task', { patient: `Patient/${patient.id}` })) as Task[];
-    const [issue] = (await medplum.searchResources('DetectedIssue', {
-      patient: `Patient/${patient.id}`,
-    })) as DetectedIssue[];
-    expect(task.encounter).toBeUndefined();
-    expect(task).toMatchObject({
-      status: 'requested',
-      intent: 'order',
-      priority: 'routine',
-      code: { text: 'Reconcile lisinopril dose with outside discharge summary' },
-      focus: { reference: `DetectedIssue/${issue.id}` },
-      reasonReference: { reference: `Encounter/${encounter.id}` },
-      for: { reference: `Patient/${patient.id}` },
-    });
-    expect(issue.mitigation?.[0]?.action.text).toBe('Reconciliation task created');
-    expect(await screen.findByText('Open task')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create reconciliation task' })).not.toBeInTheDocument();
+  test('shows placeholders while the passages load and a notice for a missing version', () => {
+    const { container } = setup({ check: makeCheck({ passages: { loaded: false } }) });
+    expect(container).toHaveTextContent('…');
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
+    setup({ check: makeCheck({ passages: { loaded: true, outside: LOADED.outside } }) });
+    expect(screen.getByText('The version that was checked could not be loaded.')).toBeInTheDocument();
   });
 
-  test('offers edit and sign-with-reason actions', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender, handlers } = setup();
-    rerender({ requestSeq: 1 });
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit note' }));
+  test('offers edit, sign with reason and task actions', async () => {
+    const check = makeCheck();
+    const { handlers } = setup({ check });
+    await userEvent.click(screen.getByRole('button', { name: 'Edit note' }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign with a documented reason' }));
-    expect(handlers.onEditNote).toHaveBeenCalled();
-    expect(handlers.onSignWithReason).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Create reconciliation task' }));
+    expect(handlers.onEditNote).toHaveBeenCalledTimes(1);
+    expect(handlers.onSignWithReason).toHaveBeenCalledTimes(1);
+    expect(check.createTask).toHaveBeenCalledTimes(1);
   });
 
-  test('hides actions for agreement', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(
-      botResult({
-        results: [
-          {
-            medication: 'lisinopril',
-            choice: 'agreement',
-            probabilities: { agreement: 0.98, potential_conflict: 0.01, insufficient_information: 0.01 },
-            confidence: 0.97,
-          },
-        ],
-      })
-    );
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    expect(await screen.findByText('Agreement', BADGE)).toBeInTheDocument();
+  test('hides actions for agreement', () => {
+    setup({
+      check: makeCheck({
+        issue: makeIssue({
+          ...CONFLICT,
+          choice: 'agreement',
+          probabilities: { agreement: 0.98, potential_conflict: 0.01, insufficient_information: 0.01 },
+        }),
+      }),
+    });
+    expect(screen.getByText('Agreement', BADGE)).toBeInTheDocument();
+    expect(screen.getByText(/No action is needed before signing/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit note' })).not.toBeInTheDocument();
   });
 
-  test('hides actions once the note is signed and locked', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    await screen.findByRole('button', { name: 'Edit note' });
-    rerender({ requestSeq: 1, locked: true });
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Edit note' })).not.toBeInTheDocument());
+  test('hides actions once the note is signed and locked', () => {
+    setup({ locked: true });
     expect(screen.getByText('Potential conflict', BADGE)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit note' })).not.toBeInTheDocument();
   });
 
-  test('shows the reason and no prediction when the check is unavailable', async () => {
-    vi.spyOn(medplum, 'executeBot').mockResolvedValue({
-      status: 'unavailable',
-      reason: 'No chart note has been saved for this visit yet',
-    });
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    const alert = await screen.findByRole('alert');
+  test('lists the mitigations and links to the reconciliation task', () => {
+    const task: WithId<Task> = { resourceType: 'Task', id: 'task-1', status: 'requested', intent: 'order' };
+    const mitigation = [
+      { action: { text: 'Reconciliation task created' }, date: '2026-09-23T15:10:00Z' },
+      { action: { text: 'Signed with documented reason' }, date: '2026-09-23T15:20:00Z' },
+    ];
+    setup({ check: makeCheck({ issue: makeIssue(CONFLICT, mitigation), task }) });
+    expect(screen.getByText(/Reconciliation task created/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open task' })).toHaveAttribute('href', '/Task/task-1');
+    expect(screen.getByText(/Signed with documented reason/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create reconciliation task' })).not.toBeInTheDocument();
+  });
+
+  test('shows progress while a check runs', () => {
+    setup({ check: makeCheck({ running: true }) });
+    expect(screen.getByText(/Checking the note against the outside discharge summary/)).toBeInTheDocument();
+    expect(screen.queryByText('Potential conflict', BADGE)).not.toBeInTheDocument();
+  });
+
+  test('shows the reason and no prediction when the check is unavailable', () => {
+    setup({ check: makeCheck({ issue: undefined, error: 'No chart note has been saved for this visit yet' }) });
+    const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('No chart note has been saved for this visit yet');
     expect(alert).toHaveTextContent('No replacement prediction is shown');
-    expect(await medplum.searchResources('DetectedIssue', { patient: `Patient/${patient.id}` })).toHaveLength(0);
   });
 
-  test('refuses to call the Bot outside the configured project', async () => {
-    vi.mocked(medplum.getProject).mockReturnValue({ resourceType: 'Project', id: 'other' });
-    const execute = vi.spyOn(medplum, 'executeBot');
-    const { rerender } = setup();
-    rerender({ requestSeq: 1 });
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in to the configured synthetic demo project');
-    expect(execute).not.toHaveBeenCalled();
+  test('renders nothing without a check', () => {
+    const { container } = setup({ check: makeCheck({ issue: undefined }) });
+    // Only Mantine's style tags are rendered.
+    expect(Array.from(container.children).filter((el) => el.tagName !== 'STYLE')).toHaveLength(0);
   });
 });

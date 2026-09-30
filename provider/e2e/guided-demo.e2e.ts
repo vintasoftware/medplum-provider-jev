@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import type { ScenarioIds } from './fixtures.ts';
 import {
@@ -23,10 +23,10 @@ const scenario = JSON.parse(readFileSync(new URL('../src/data/guided-scenario.js
   variants: { id: string; note: string }[];
 };
 const NOTE = Object.fromEntries(scenario.variants.map((v) => [v.id, v.note]));
-const popover = (page: Page) => page.locator('.driver-popover');
-const coach = (page: Page) => page.getByRole('region', { name: 'Guided demo' });
+const popover = (page: Page): Locator => page.locator('.driver-popover');
+const coach = (page: Page): Locator => page.getByRole('region', { name: 'Guided demo' });
 
-/** Starts a scenario with the tutorial hidden, writes the note, finishes the visit. */
+// Starts a scenario with the tutorial hidden, writes the note, finishes the visit.
 async function finishWithNote(page: Page, note: string): Promise<ScenarioIds> {
   const ids = await startScenario(page, { tutorial: false });
   await openTodaysVisit(page, ids);

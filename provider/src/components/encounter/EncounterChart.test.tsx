@@ -10,7 +10,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION, noteSearch } from '../../utils/consistency';
+import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION } from '../../utils/consistency';
+import { noteSearch } from '../../utils/consistency-review';
 import { EncounterChart } from './EncounterChart';
 
 const mockPractitioner: WithId<Practitioner> = {
@@ -869,7 +870,10 @@ describe('EncounterChart', () => {
     });
 
     test("edits the newest note of the visit's patient, the one the Bot reads", async () => {
-      const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+      const tick = (): Promise<void> =>
+        new Promise((resolve) => {
+          setTimeout(resolve, 5);
+        });
       await medplum.createResource(finished);
       const older = await medplum.createResource<ClinicalImpression>({
         ...mockClinicalImpression,

@@ -1,5 +1,5 @@
 import type { MedplumClient, WithId } from '@medplum/core';
-import { createReference, getReferenceString } from '@medplum/core';
+import { createReference } from '@medplum/core';
 import type {
   ClinicalImpression,
   DetectedIssue,
@@ -10,14 +10,9 @@ import type {
   Practitioner,
   Reference,
 } from '@medplum/fhirtypes';
-import type { ReviewOutput, ReviewResult } from '../../bots/consistency';
-import { noteSearch, splitSentences } from '../../bots/consistency';
 import contract from '../data/model-contract.json';
-
-export { noteSearch, splitSentences };
-export type { ReviewOutput };
-export type ReviewLabel = ReviewResult['choice'];
-export type ReviewSuccess = Extract<ReviewOutput, { status: 'ok' }>;
+import type { ReviewLabel, ReviewOutput, ReviewResult, ReviewSuccess } from './consistency-review';
+import { splitSentences } from './consistency-review';
 
 export const REVIEW_LABELS: Record<ReviewLabel, string> = {
   agreement: 'Agreement',
@@ -58,7 +53,11 @@ export async function reviewEncounter(medplum: MedplumClient, encounterId: strin
 
 const SEVERITY: ReviewLabel[] = ['potential_conflict', 'insufficient_information', 'agreement'];
 
-/** The result the card leads with: any conflict first, then missing information. */
+/**
+ * The result the card leads with: any conflict first, then missing information.
+ * @param results - The results of one check.
+ * @returns The result to lead with.
+ */
 export function headlineResult<T extends Pick<ReviewResult, 'choice'>>(results: T[]): T | undefined {
   return [...results].sort((a, b) => SEVERITY.indexOf(a.choice) - SEVERITY.indexOf(b.choice))[0];
 }
@@ -125,9 +124,7 @@ export function buildDetectedIssue(
       .map(
         (r) =>
           `${REVIEW_LABELS[r.choice]} (${r.medication}): ` +
-          contract.labels
-            .map((l) => `${REVIEW_LABELS[l as ReviewLabel]} ${percent(r.probabilities[l as ReviewLabel])}`)
-            .join(', ') +
+          contract.labels.map((l) => `${REVIEW_LABELS[l]} ${percent(r.probabilities[l])}`).join(', ') +
           (r.label_rule === 'no_dose_sentence' ? ' (label set by rule: no dose sentence in one document)' : '')
       )
       .join('; '),
@@ -154,14 +151,14 @@ export function readStoredCheck(issue: DetectedIssue): StoredCheck | undefined {
 
 /** A versioned reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
 export interface ImplicatedSource {
-  id: string;
+  reference: string;
   versionId: string;
 }
 
 function implicatedSource(issue: DetectedIssue, resourceType: string): ImplicatedSource | undefined {
-  const pattern = new RegExp(`^${resourceType}/([^/]+)/_history/([^/]+)$`);
+  const pattern = new RegExp(`^${resourceType}/[^/]+/_history/([^/]+)$`);
   const match = issue.implicated?.map((r) => pattern.exec(r.reference ?? '')).find(Boolean);
-  return match ? { id: match[1], versionId: match[2] } : undefined;
+  return match ? { reference: match[0], versionId: match[1] } : undefined;
 }
 
 export function implicatedNote(issue: DetectedIssue): ImplicatedSource | undefined {
@@ -172,14 +169,22 @@ export function implicatedDocument(issue: DetectedIssue): ImplicatedSource | und
   return implicatedSource(issue, 'DocumentReference');
 }
 
-/** The version of a source that a check read, or undefined when it cannot be loaded. */
+/**
+ * The version of a source that a check read, or undefined when it cannot be loaded.
+ *
+ * @param medplum - The Medplum client.
+ * @param resourceType - The source's resource type.
+ * @param reference - The versioned reference, as `implicatedNote` or `implicatedDocument` return it.
+ * @returns The source at that version.
+ */
 export async function readCheckedVersion<K extends 'ClinicalImpression' | 'DocumentReference'>(
   medplum: MedplumClient,
   resourceType: K,
-  source: ImplicatedSource
+  reference: string
 ): Promise<ExtractResource<K> | undefined> {
+  const [, id, , versionId] = reference.split('/');
   try {
-    return await medplum.readVersion(resourceType, source.id, source.versionId);
+    return await medplum.readVersion(resourceType, id, versionId);
   } catch {
     return undefined;
   }
@@ -187,17 +192,22 @@ export async function readCheckedVersion<K extends 'ClinicalImpression' | 'Docum
 
 export async function findLatestCheck(
   medplum: MedplumClient,
-  encounter: WithId<Encounter>
+  encounterId: string
 ): Promise<WithId<DetectedIssue> | undefined> {
   return medplum.searchOne(
     'DetectedIssue',
     // Sort by identification time: adding a mitigation changes _lastUpdated of an older check.
-    { implicated: getReferenceString(encounter), code: `${CHECK_CODE_SYSTEM}|${CHECK_CODE}`, _sort: '-identified' },
+    { implicated: `Encounter/${encounterId}`, code: `${CHECK_CODE_SYSTEM}|${CHECK_CODE}`, _sort: '-identified' },
     { cache: 'no-cache' }
   );
 }
 
-/** The text of a document's first attachment, inline (`data`) or by URL (e.g. a Binary). */
+/**
+ * The text of a document's first attachment, inline (`data`) or by URL (e.g. a Binary).
+ * @param medplum - The Medplum client.
+ * @param doc - The document.
+ * @returns The text, or undefined without an attachment.
+ */
 export async function attachmentText(medplum: MedplumClient, doc: DocumentReference): Promise<string | undefined> {
   const attachment = doc.content?.[0]?.attachment;
   if (attachment?.data) {

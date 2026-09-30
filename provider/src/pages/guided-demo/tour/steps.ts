@@ -1,5 +1,5 @@
 import scenario from '../../../data/guided-scenario.json';
-import type { ReviewLabel } from '../../../utils/consistency';
+import type { ReviewLabel } from '../../../utils/consistency-review';
 import { PATIENT_TAB_SELECTORS, TOUR, tourSelector } from './anchors';
 
 // The tutorial never advances by hand. Each step is done when the chart's server state
@@ -61,17 +61,29 @@ const firstCheck = (s: ScenarioState): ScenarioState['checks'][number] | undefin
 const flaggedChecks = (s: ScenarioState): ScenarioState['checks'] => s.checks.filter((c) => c.choice !== 'agreement');
 const firstIsAgreement = (s: ScenarioState): boolean => firstCheck(s)?.choice === 'agreement';
 
-/** The note was edited after a flagged check, or the note was checked again since. */
+/**
+ * The note was edited after a flagged check, or the note was checked again since.
+ * @param s - Server state.
+ * @returns True once the provider moved past a flagged check.
+ */
 export function editedAfterFlag(s: ScenarioState): boolean {
   return flaggedChecks(s).some((c) => c.noteVersion !== s.noteVersion || s.checks[0] !== c);
 }
 
-/** The provider acted on a flagged check: edited the note or chose a disposition. */
+/**
+ * The provider acted on a flagged check: edited the note or chose a disposition.
+ * @param s - Server state.
+ * @returns True once a flagged check was handled.
+ */
 export function handled(s: ScenarioState): boolean {
   return editedAfterFlag(s) || flaggedChecks(s).some((c) => c.mitigated);
 }
 
-/** Re-check done: a newer check agrees, or two checks followed the first flagged one. */
+/**
+ * Re-check done: a newer check agrees, or two checks followed the first flagged one.
+ * @param s - Server state.
+ * @returns True once the edited note was checked again.
+ */
 export function rechecked(s: ScenarioState): boolean {
   const flagged = flaggedChecks(s);
   if (flagged.length === 0) {
@@ -135,8 +147,7 @@ export const STEPS: TourStep[] = [
     id: 'write-note',
     mode: 'type',
     title: 'Write the visit note',
-    description:
-      `The patient reports: ${scenario.visit_story} ` + 'Document the visit and the medication plan in your own words.',
+    description: `The patient reports: ${scenario.visit_story} Document the visit and the medication plan in your own words.`,
     anchor: () => tourSelector(TOUR.chartNote),
     ready: (s) => s.noteSaved,
     waiting: 'Type the note; it saves automatically.',

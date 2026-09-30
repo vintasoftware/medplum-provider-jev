@@ -1,20 +1,20 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
 import { Box, Button, Card, Group, Stack, Textarea, Title } from '@mantine/core';
-import { useDebouncedCallback } from '@mantine/hooks';
 import type { WithId } from '@medplum/core';
 import { createReference, getReferenceString } from '@medplum/core';
-import type { DetectedIssue, Encounter, Patient, Practitioner, Provenance, Reference, Task } from '@medplum/fhirtypes';
+import type { Encounter, Practitioner, Provenance, Reference, Task } from '@medplum/fhirtypes';
 import { Loading, useMedplum } from '@medplum/react';
 import { IconStethoscope } from '@tabler/icons-react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { COMPLETE_LIST_COUNT, SAVE_TIMEOUT_MS } from '../../config/constants';
+import { COMPLETE_LIST_COUNT } from '../../config/constants';
+import { useChartNoteAutosave } from '../../hooks/useChartNoteAutosave';
+import { useConsistencyCheck } from '../../hooks/useConsistencyCheck';
 import { useEncounterChart } from '../../hooks/useEncounterChart';
 import { useGuidedDemo } from '../../pages/guided-demo/GuidedDemoContext';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
 import { ChartNoteStatus } from '../../types/encounter';
-import { appendMitigation, SIGNED_WITH_REASON } from '../../utils/consistency';
 import { buildSignatureProvenance, updateEncounterStatus } from '../../utils/encounter';
 import { showErrorNotification } from '../../utils/notifications';
 import { TaskDetailsModal } from '../tasks/TaskDetailsModal';
@@ -60,12 +60,14 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   const [chartNote, setChartNote] = useState(clinicalImpression?.note?.[0]?.text);
   const [provenances, setProvenances] = useState<Provenance[]>([]);
   const [chartNoteStatus, setChartNoteStatus] = useState(ChartNoteStatus.Unsigned);
-  // Consistency review: a raised sequence number asks the card to run one check.
-  const [reviewSeq, setReviewSeq] = useState(0);
-  const [reviewRunning, setReviewRunning] = useState(false);
-  const [reviewIssue, setReviewIssue] = useState<WithId<DetectedIssue>>();
-  const [signReasonSeq, setSignReasonSeq] = useState(0);
+  // The Sign dialog opens from the header's lock button, or from the review card with a required reason.
+  const [signDialog, setSignDialog] = useState<'sign' | 'reason'>();
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
+  const { save: saveChartNote, flush: flushChartNote } = useChartNoteAutosave(clinicalImpression, {
+    onSaved: demo?.refresh,
+  });
+  const check = useConsistencyCheck(encounter, { beforeCheck: flushChartNote, onChange: demo?.refresh });
+  const { runCheck } = check;
 
   useEffect(() => {
     if (!encounter) {
@@ -109,95 +111,25 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
         setEncounter(updatedEncounter);
         onEncounterChange?.(updatedEncounter);
         // Check the note once when the visit becomes Finished. This runs only from the
-        // user's status change, never on render or reload. The card saves the note first.
+        // user's status change, never on render or reload. The check saves the note first.
         if (newStatus === 'finished' && previousStatus !== 'finished' && clinicalImpression) {
-          setReviewSeq((seq) => seq + 1);
+          runCheck().catch(showErrorNotification);
         }
         demo?.refresh();
       } catch (err) {
         showErrorNotification(err);
       }
     },
-    [encounter, medplum, setEncounter, onEncounterChange, appointment, clinicalImpression, demo]
+    [encounter, medplum, setEncounter, onEncounterChange, appointment, clinicalImpression, demo, runCheck]
   );
 
   const handleTabChange = (tab: string): void => {
     setActiveTab(tab);
   };
 
-  // Whether the server copy currently has a note; `clinicalImpression` state is not refreshed on
-  // note saves, so this decides between add and remove when the note is cleared.
-  const noteOnServerRef = useRef<boolean | undefined>(undefined);
-
-  // Latest typed text and whether it still needs saving, so a check can flush it first.
-  const latestNoteRef = useRef<string | undefined>(undefined);
-  const notePendingRef = useRef(false);
-  const noteSaveRef = useRef<Promise<void>>(Promise.resolve());
-
-  const saveChartNote = useCallback(
-    (note: string): Promise<void> => {
-      if (!clinicalImpression) {
-        return Promise.resolve();
-      }
-      notePendingRef.current = false;
-      const save = async (): Promise<void> => {
-        try {
-          let updated;
-          if (note) {
-            updated = await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [
-              { op: 'add', path: '/note', value: [{ text: note }] },
-            ]);
-            noteOnServerRef.current = true;
-          } else if (noteOnServerRef.current ?? Boolean(clinicalImpression.note)) {
-            updated = await medplum.patchResource('ClinicalImpression', clinicalImpression.id, [
-              { op: 'remove', path: '/note' },
-            ]);
-            noteOnServerRef.current = false;
-          }
-          if (updated) {
-            demo?.refresh();
-          }
-        } catch (err) {
-          // Keep the latest text pending so the next flush saves it again.
-          notePendingRef.current = true;
-          throw err;
-        }
-      };
-      // Chain saves so they reach the server in typing order. A failed save rejects its own
-      // promise but does not block the saves queued after it.
-      const queued = noteSaveRef.current.catch(() => undefined).then(save);
-      noteSaveRef.current = queued;
-      return queued;
-    },
-    [clinicalImpression, medplum, demo]
-  );
-
-  const debouncedPatchChartNote = useDebouncedCallback((note: string): void => {
-    saveChartNote(note).catch(showErrorNotification);
-  }, SAVE_TIMEOUT_MS);
-
-  /**
-   * Saves pending note text now instead of after the debounce, and waits for any save in flight.
-   * Rejects when the text could not be saved, so a check or signature never uses an older note.
-   */
-  const flushChartNote = useCallback(async (): Promise<void> => {
-    if (notePendingRef.current) {
-      debouncedPatchChartNote.cancel();
-      await saveChartNote(latestNoteRef.current ?? '');
-    }
-    await noteSaveRef.current;
-  }, [debouncedPatchChartNote, saveChartNote]);
-
   const handleChartNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
     setChartNote(e.target.value);
-
-    if (!clinicalImpression) {
-      return;
-    }
-
-    latestNoteRef.current = e.target.value;
-    notePendingRef.current = true;
-    debouncedPatchChartNote(e.target.value);
+    saveChartNote(e.target.value);
   };
 
   const handleSign = async (practitioner: Reference<Practitioner>, lock: boolean, reason?: string): Promise<void> => {
@@ -242,12 +174,12 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
     const newProvenance = await medplum.createResource<Provenance>(
       buildSignatureProvenance(encounter, practitioner, new Date().toISOString(), {
         reason: signedWithReason,
-        entity: signedWithReason && reviewIssue ? createReference(reviewIssue) : undefined,
+        entity: signedWithReason && check.issue ? createReference(check.issue) : undefined,
       })
     );
 
-    if (signedWithReason && reviewIssue) {
-      setReviewIssue(await appendMitigation(medplum, reviewIssue, SIGNED_WITH_REASON, practitioner, true));
+    if (signedWithReason) {
+      await check.markSignedWithReason(practitioner);
     }
 
     setProvenances([...provenances, newProvenance]);
@@ -261,7 +193,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   };
 
   const handleCheckNote = (): void => {
-    setReviewSeq((seq) => seq + 1);
+    runCheck().catch(showErrorNotification);
   };
 
   const handleEditNote = (): void => {
@@ -271,6 +203,8 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   if (!patientResource || !encounter) {
     return <Loading />;
   }
+
+  const currentNote = chartNote ?? clinicalImpression?.note?.[0]?.text ?? '';
 
   return (
     <>
@@ -282,7 +216,10 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
           onStatusChange={handleEncounterStatusChange}
           onTabChange={handleTabChange}
           onSign={handleSign}
-          signReasonRequest={signReasonSeq}
+          signDialogOpened={signDialog !== undefined}
+          onSignDialogOpen={() => setSignDialog('sign')}
+          onSignDialogClose={() => setSignDialog(undefined)}
+          requireSignReason={signDialog === 'reason'}
         />
         <Box p="md">
           {activeTab === 'notes' && (
@@ -299,7 +236,7 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
                       radius="xl"
                       leftSection={<IconStethoscope size={14} />}
                       onClick={handleCheckNote}
-                      disabled={!(chartNote ?? clinicalImpression.note?.[0]?.text)?.trim() || reviewRunning}
+                      disabled={!currentNote.trim() || check.running}
                       data-tour={TOUR.checkNote}
                     >
                       Check note
@@ -320,16 +257,11 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
               )}
               {clinicalImpression && (
                 <ConsistencyReviewCard
-                  encounter={encounter}
-                  patient={encounter.subject as Reference<Patient>}
-                  noteText={chartNote ?? clinicalImpression.note?.[0]?.text ?? ''}
-                  requestSeq={reviewSeq}
-                  beforeCheck={flushChartNote}
+                  check={check}
+                  noteText={currentNote}
                   locked={chartNoteStatus === ChartNoteStatus.SignedAndLocked}
                   onEditNote={handleEditNote}
-                  onSignWithReason={() => setSignReasonSeq((seq) => seq + 1)}
-                  onIssueChange={setReviewIssue}
-                  onRunningChange={setReviewRunning}
+                  onSignWithReason={() => setSignDialog('reason')}
                 />
               )}
               {tasks.map((task) => (

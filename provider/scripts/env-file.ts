@@ -5,7 +5,11 @@ export function readEnv(path: string): Record<string, string> {
   return existsSync(path) ? (parseEnv(readFileSync(path, 'utf8')) as Record<string, string>) : {};
 }
 
-/** Sets keys in a dotenv file, replacing their lines in place and leaving every other line untouched. */
+/**
+ * Sets keys in a dotenv file, replacing their lines in place and leaving every other line untouched.
+ * @param path - The dotenv file.
+ * @param values - The keys to set.
+ */
 export function setEnvKeys(path: string, values: Record<string, string>): void {
   const lines = existsSync(path) ? readFileSync(path, 'utf8').split('\n') : [];
   if (lines.at(-1) === '') {

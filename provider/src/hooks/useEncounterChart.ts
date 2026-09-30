@@ -15,7 +15,7 @@ import { useMedplum, useResource } from '@medplum/react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
 import { COMPLETE_LIST_COUNT } from '../config/constants';
-import { noteSearch } from '../utils/consistency';
+import { noteSearch } from '../utils/consistency-review';
 import { showErrorNotification } from '../utils/notifications';
 
 export interface EncounterChartHook {

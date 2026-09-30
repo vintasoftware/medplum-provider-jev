@@ -13,57 +13,32 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import type { WithId } from '@medplum/core';
-import { createReference, formatDateTime, getReferenceString } from '@medplum/core';
-import type { DetectedIssue, Encounter, Patient, Practitioner, Reference, Task } from '@medplum/fhirtypes';
-import { MedplumLink, useMedplum, useMedplumProfile } from '@medplum/react';
+import { formatDateTime } from '@medplum/core';
+import { MedplumLink } from '@medplum/react';
 import { IconAlertTriangle, IconClipboardPlus, IconPencil, IconSignature } from '@tabler/icons-react';
 import type { JSX, ReactNode } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import contract from '../../data/model-contract.json';
-import { useGuidedDemo } from '../../pages/guided-demo/GuidedDemoContext';
+import type { ConsistencyCheck } from '../../hooks/useConsistencyCheck';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
-import type { ReviewLabel, StoredCheck } from '../../utils/consistency';
 import {
-  appendMitigation,
-  attachmentText,
-  buildDetectedIssue,
-  findLatestCheck,
   headlineResult,
-  implicatedDocument,
-  implicatedNote,
-  noteText,
-  readCheckedVersion,
   readStoredCheck,
   RECONCILIATION_TASK_CREATED,
   REVIEW_LABEL_COLORS,
   REVIEW_LABELS,
-  reviewEncounter,
-  splitSentences,
 } from '../../utils/consistency';
+import type { ReviewLabel } from '../../utils/consistency-review';
+import { splitSentences } from '../../utils/consistency-review';
 import { showErrorNotification } from '../../utils/notifications';
 
 export interface ConsistencyReviewCardProps {
-  readonly encounter: WithId<Encounter>;
-  readonly patient: Reference<Patient>;
+  readonly check: ConsistencyCheck;
   /** The note's current text. The check is stale when it differs from the text that was checked. */
   readonly noteText: string;
-  /** Raised by the chart to request a check. The value on mount never triggers one. */
-  readonly requestSeq: number;
-  /** Saves any pending note text before the Bot reads it; rejects when it could not be saved. */
-  readonly beforeCheck: () => Promise<void>;
   readonly locked: boolean;
   readonly onEditNote: () => void;
   readonly onSignWithReason: () => void;
-  readonly onIssueChange?: (issue: WithId<DetectedIssue> | undefined) => void;
-  readonly onRunningChange?: (running: boolean) => void;
-}
-
-/** Passages as the check read them. A source is missing once `loaded` if its checked version cannot be read. */
-interface Passages {
-  loaded: boolean;
-  outside?: { title: string; date?: string; text: string };
-  note?: string;
 }
 
 const PASSAGE_UNAVAILABLE = 'The version that was checked could not be loaded.';
@@ -115,188 +90,11 @@ function summary(choice: ReviewLabel, medication: string, outsideDate: string, m
 }
 
 export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.Element | null {
-  const {
-    encounter,
-    patient,
-    noteText: currentNote,
-    requestSeq,
-    beforeCheck,
-    locked,
-    onEditNote,
-    onSignWithReason,
-  } = props;
-  const { onIssueChange, onRunningChange } = props;
-  const medplum = useMedplum();
-  const profile = useMedplumProfile();
-  const demo = useGuidedDemo();
-  const [issue, setIssueState] = useState<WithId<DetectedIssue>>();
-  const [passages, setPassages] = useState<Passages>({ loaded: false });
-  const [running, setRunningState] = useState(false);
-  const [error, setError] = useState<string>();
+  const { check, noteText: currentNote, locked, onEditNote, onSignWithReason } = props;
+  const { issue, passages, task, running, error, creatingTask } = check;
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [creatingTask, setCreatingTask] = useState(false);
-  const [task, setTask] = useState<WithId<Task>>();
-  const handledSeq = useRef(requestSeq);
-  const runningRef = useRef(false);
-
-  const author = profile ? (createReference(profile) as Reference<Practitioner>) : undefined;
-
-  const setIssue = useCallback(
-    (value: WithId<DetectedIssue> | undefined) => {
-      setIssueState(value);
-      onIssueChange?.(value);
-    },
-    [onIssueChange]
-  );
-
-  const setRunning = useCallback(
-    (value: boolean) => {
-      runningRef.current = value;
-      setRunningState(value);
-      onRunningChange?.(value);
-    },
-    [onRunningChange]
-  );
-
-  // Load the newest stored check instead of re-running on mount or reload.
-  useEffect(() => {
-    let cancelled = false;
-    findLatestCheck(medplum, encounter)
-      .then((found) => {
-        if (!cancelled && found) {
-          setIssue(found);
-        }
-      })
-      .catch(showErrorNotification);
-    return () => {
-      cancelled = true;
-    };
-  }, [medplum, encounter.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // An open reconciliation task for this check hides the task action.
-  useEffect(() => {
-    if (!issue) {
-      setTask(undefined);
-      return;
-    }
-    medplum
-      .searchOne('Task', { focus: getReferenceString(issue) }, { cache: 'no-cache' })
-      .then(setTask)
-      .catch(showErrorNotification);
-  }, [medplum, issue]);
-
-  // Re-read the passages from the exact versions the check used. A check's sources never change,
-  // so a mitigation (a new issue object with the same id) does not reload them.
-  useEffect(() => {
-    setPassages({ loaded: false });
-    if (!issue) {
-      return undefined;
-    }
-    let cancelled = false;
-    const load = async (): Promise<Passages> => {
-      const docSource = implicatedDocument(issue);
-      const noteSource = implicatedNote(issue);
-      const [doc, impression] = await Promise.all([
-        docSource ? readCheckedVersion(medplum, 'DocumentReference', docSource) : undefined,
-        noteSource ? readCheckedVersion(medplum, 'ClinicalImpression', noteSource) : undefined,
-      ]);
-      const outsideText = doc ? await attachmentText(medplum, doc).catch(() => undefined) : undefined;
-      return {
-        loaded: true,
-        outside:
-          doc && outsideText
-            ? { title: doc.description ?? 'Discharge summary', date: doc.date, text: outsideText }
-            : undefined,
-        note: impression ? noteText(impression) : undefined,
-      };
-    };
-    load()
-      .then((loaded) => !cancelled && setPassages(loaded))
-      .catch(showErrorNotification);
-    return () => {
-      cancelled = true;
-    };
-  }, [medplum, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const runCheck = useCallback(async (): Promise<void> => {
-    if (runningRef.current) {
-      return;
-    }
-    setRunning(true);
-    setError(undefined);
-    try {
-      try {
-        await beforeCheck();
-      } catch {
-        // Never check an older server copy than the text on screen.
-        setError('The note could not be saved, so it was not checked');
-        return;
-      }
-      const review = await reviewEncounter(medplum, encounter.id);
-      if (review.status !== 'ok') {
-        setError(review.reason);
-        return;
-      }
-      if (!author) {
-        setError('No signed-in practitioner');
-        return;
-      }
-      const created = await medplum.createResource(buildDetectedIssue(review, patient, encounter, author));
-      setIssue(created);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'The check could not be completed');
-    } finally {
-      setRunning(false);
-      demo?.refresh();
-    }
-  }, [author, beforeCheck, demo, encounter, medplum, patient, setIssue, setRunning]);
-
-  useEffect(() => {
-    if (requestSeq !== handledSeq.current) {
-      handledSeq.current = requestSeq;
-      runCheck().catch(showErrorNotification);
-    }
-  }, [requestSeq, runCheck]);
-
-  const stored: StoredCheck | undefined = issue ? readStoredCheck(issue) : undefined;
+  const stored = issue ? readStoredCheck(issue) : undefined;
   const headline = stored ? headlineResult(stored.results) : undefined;
-
-  const createTask = async (): Promise<void> => {
-    if (!issue || !headline || !author) {
-      return;
-    }
-    setCreatingTask(true);
-    try {
-      const created = await medplum.createResource<Task>({
-        resourceType: 'Task',
-        status: 'requested',
-        intent: 'order',
-        priority: 'routine',
-        code: { text: `Reconcile ${headline.medication} dose with outside discharge summary` },
-        for: patient,
-        owner: author,
-        requester: author,
-        authoredOn: new Date().toISOString(),
-        focus: createReference(issue),
-        reasonReference: createReference(encounter),
-        // No Task.encounter: Sign & Lock completes every Task found by Task?encounter=.
-        note: [
-          {
-            text: `The consistency check found "${REVIEW_LABELS[headline.choice]}" between today's note and the outside discharge summary.`,
-            authorReference: author,
-            time: new Date().toISOString(),
-          },
-        ],
-      });
-      setTask(created);
-      setIssue(await appendMitigation(medplum, issue, RECONCILIATION_TASK_CREATED, author, false));
-    } catch (err) {
-      showErrorNotification(err);
-    } finally {
-      setCreatingTask(false);
-      demo?.refresh();
-    }
-  };
 
   if (running) {
     return (
@@ -382,8 +180,8 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
                   contract.labels.map((label) => (
                     <Table.Tr key={`${r.medication}-${label}`}>
                       <Table.Td>{r.medication}</Table.Td>
-                      <Table.Td>{REVIEW_LABELS[label as ReviewLabel]}</Table.Td>
-                      <Table.Td>{(r.probabilities[label as ReviewLabel] * 100).toFixed(1)}%</Table.Td>
+                      <Table.Td>{REVIEW_LABELS[label]}</Table.Td>
+                      <Table.Td>{(r.probabilities[label] * 100).toFixed(1)}%</Table.Td>
                     </Table.Tr>
                   ))
                 )}
@@ -433,7 +231,7 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
                 variant="light"
                 leftSection={<IconClipboardPlus size={16} />}
                 onClick={() => {
-                  createTask().catch(showErrorNotification);
+                  check.createTask().catch(showErrorNotification);
                 }}
                 loading={creatingTask}
               >

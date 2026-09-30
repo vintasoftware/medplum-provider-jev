@@ -7,6 +7,8 @@ import type {
   Parameters,
 } from '@medplum/fhirtypes';
 import contract from '../src/data/model-contract.json' with { type: 'json' };
+import type { ReviewOutput, ReviewResult } from '../src/utils/consistency-review.ts';
+import { noteSearch, splitSentences } from '../src/utils/consistency-review.ts';
 
 // Reads the visit note, the newest outside discharge summary and the active medications
 // as the signed-in user (the Bot runs with runAsUser), asks the model whether the two
@@ -21,48 +23,16 @@ const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const { limits, labels } = contract;
 
-/**
- * The search that picks a visit's note: the most recently updated ClinicalImpression for the
- * encounter and its patient. The editor, the Bot and the tutorial use it so they read the same note.
- */
-export function noteSearch(encounter: string, subject: string): Record<string, string> {
-  return { encounter, subject, _sort: '-_lastUpdated', _count: '1' };
-}
-
-type Label = (typeof contract.labels)[number];
 type SourceDocument = { title: string; date: string; author: string; text: string };
 type Question = { type: 'choice' | 'noul'; instructions: string; criteria?: Record<string, string> };
-
-export type ReviewResult = {
-  medication: string;
-  choice: Label;
-  probabilities: Record<Label, number>;
-  confidence: number;
-  sentence_outside?: string;
-  sentence_note?: string;
-  /** Set when a rule, not the model's top score, chose `choice`; `probabilities` and `confidence` stay the model's. */
-  label_rule?: 'no_dose_sentence';
-};
-
-export type ReviewOutput =
-  | {
-      status: 'ok';
-      checked_at: string;
-      model: string;
-      input_tokens: number;
-      results: ReviewResult[];
-      mentions_hospital_stay: number;
-      documents: { title: string; date: string; text: string; source: string }[];
-      note_version: string;
-      outside_version: string;
-    }
-  | { status: 'unavailable'; reason: string };
 
 /** A problem the card shows as-is. Never include document text or secrets in the message. */
 class Unavailable extends Error {}
 
 function parseInput(input: unknown): string {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid review request');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Invalid review request');
+  }
   const value = input as Record<string, unknown>;
   if (
     Object.keys(value).sort().join(',') !== 'action,encounter_id' ||
@@ -86,20 +56,13 @@ export function cleanText(text: string): string {
   return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim();
 }
 
-export function splitSentences(text: string): string[] {
-  return text
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 const RXNORM = 'http://www.nlm.nih.gov/research/umls/rxnorm';
 const RXCUI = /^[1-9]\d{0,9}$/;
 const TERMINOLOGY_INVALID = 'Medication terminology returned an invalid response';
 
 type RxConcept = { name: string; tty: string[]; ai: string[]; ingredientOf: string[] };
 
-/** The display and the `$lookup` properties that ingredient resolution reads. */
+// The display and the `$lookup` properties that ingredient resolution reads.
 function rxConcept(params: Parameters | undefined): RxConcept {
   const property = (code: string): string[] =>
     (params?.parameter ?? []).flatMap(({ name, part = [] }) => {
@@ -123,6 +86,11 @@ const isIngredient = (concept: RxConcept): boolean => concept.tty.some((tty) => 
  * Runs `work` with a signal that aborts after `ms` or when `parent` aborts. Once it aborts, any failure
  * reports the budget that ran out, not the error the cancelled request raised. Requests still running
  * when `work` settles are cancelled.
+ * @param ms - The budget in milliseconds.
+ * @param reason - The message reported when the budget runs out.
+ * @param work - The requests to run with the signal.
+ * @param parent - A signal that also cancels the work.
+ * @returns What `work` returns.
  */
 async function withBudget<T>(
   ms: number,
@@ -145,18 +113,28 @@ async function withBudget<T>(
   }
 }
 
-/** One name per distinct ingredient set, e.g. "fibrinogen, human + thrombin, human". Lookups are shared within a review. */
+/**
+ * Resolves the active medications to one name per distinct ingredient set, e.g. "fibrinogen, human +
+ * thrombin, human". Lookups are shared within a review.
+ * @param medplum - The Medplum client, as the signed-in user.
+ * @param requests - The patient's active medication requests.
+ * @param chartSignal - The chart preparation budget.
+ * @returns The medication names to compare.
+ */
 export async function resolveMedications(
   medplum: MedplumClient,
   requests: MedicationRequest[],
   chartSignal?: AbortSignal
 ): Promise<string[]> {
-  if (!requests.length) throw new Unavailable('No active medications to compare');
+  if (!requests.length) {
+    throw new Unavailable('No active medications to compare');
+  }
   const codes = [
     ...new Set(
       requests.map((request) => {
-        if (request.medicationReference)
+        if (request.medicationReference) {
           throw new Unavailable('An active medication uses medicationReference; RxNorm coding is required');
+        }
         const rxCodes = [
           ...new Set(
             request.medicationCodeableConcept?.coding
@@ -164,13 +142,16 @@ export async function resolveMedications(
               .map((coding) => coding.code) ?? []
           ),
         ];
-        if (rxCodes.length !== 1 || !rxCodes[0] || !RXCUI.test(rxCodes[0]))
+        if (rxCodes.length !== 1 || !rxCodes[0] || !RXCUI.test(rxCodes[0])) {
           throw new Unavailable('An active medication has missing, invalid or ambiguous RxNorm coding');
+        }
         return rxCodes[0];
       })
     ),
   ];
-  if (codes.length > 20) throw new Unavailable('Too many active RxNorm codes for the demo check');
+  if (codes.length > 20) {
+    throw new Unavailable('Too many active RxNorm codes for the demo check');
+  }
   // Chart preparation has a 3.5 s budget; terminology gets at most 1.5 s of it.
   const names = await withBudget(
     1500,
@@ -180,7 +161,9 @@ export async function resolveMedications(
       const lookup = async (code: string): Promise<RxConcept> => {
         let pending = cache.get(code);
         if (!pending) {
-          if (cache.size >= 40) throw new Unavailable('Too many medication terminology lookups for the demo check');
+          if (cache.size >= 40) {
+            throw new Unavailable('Too many medication terminology lookups for the demo check');
+          }
           pending = medplum
             .get<Parameters>(medplum.fhirUrl('CodeSystem/$lookup?' + new URLSearchParams({ system: RXNORM, code })), {
               signal,
@@ -202,7 +185,9 @@ export async function resolveMedications(
           } else if (concept.ai.length) {
             ingredients = concept.ai.map((value) => {
               const match = /^\{\d+\} (\d+)$/.exec(value);
-              if (!match) throw new Unavailable(TERMINOLOGY_INVALID);
+              if (!match) {
+                throw new Unavailable(TERMINOLOGY_INVALID);
+              }
               return match[1];
             });
           } else if (concept.tty.some((tty) => tty === 'SCDC' || tty === 'SCDF')) {
@@ -211,9 +196,13 @@ export async function resolveMedications(
           } else {
             throw new Unavailable('An active RxNorm concept has no supported ingredient resolution');
           }
-          if (!ingredients.length) throw new Unavailable(TERMINOLOGY_INVALID);
+          if (!ingredients.length) {
+            throw new Unavailable(TERMINOLOGY_INVALID);
+          }
           const resolved = await Promise.all([...new Set(ingredients)].map(lookup));
-          if (!resolved.every((item) => isIngredient(item) && item.name)) throw new Unavailable(TERMINOLOGY_INVALID);
+          if (!resolved.every((item) => isIngredient(item) && item.name)) {
+            throw new Unavailable(TERMINOLOGY_INVALID);
+          }
           return [...new Set(resolved.map((item) => item.name))].sort().join(' + ');
         })
       );
@@ -221,8 +210,9 @@ export async function resolveMedications(
     chartSignal
   );
   const medications = [...new Set(names)];
-  if (medications.length > limits.max_medications)
+  if (medications.length > limits.max_medications) {
     throw new Unavailable('Too many active medications for the demo check');
+  }
   return medications;
 }
 
@@ -252,7 +242,9 @@ export function buildRequest(
     ] as const) {
       const sentences = splitSentences(doc.text);
       // Past the service's limit the check keeps the label and drops that highlight.
-      if (sentences.length < 1 || sentences.length > maxSentences) continue;
+      if (sentences.length < 1 || sentences.length > maxSentences) {
+        continue;
+      }
       questions[`sentence_${field}_${i}`] = {
         type: 'choice',
         instructions: fill(sentence.instructions, { field, medication }),
@@ -272,9 +264,15 @@ export function buildRequest(
 
 function checkDocument(doc: SourceDocument): SourceDocument {
   const text = cleanText(doc.text);
-  if (!text) throw new Unavailable('A document to compare is empty');
-  if (text.length > limits.text_max) throw new Unavailable('The note is too long for the demo check');
-  if (!DATE_PATTERN.test(doc.date)) throw new Unavailable('A document to compare has no valid date');
+  if (!text) {
+    throw new Unavailable('A document to compare is empty');
+  }
+  if (text.length > limits.text_max) {
+    throw new Unavailable('The note is too long for the demo check');
+  }
+  if (!DATE_PATTERN.test(doc.date)) {
+    throw new Unavailable('A document to compare has no valid date');
+  }
   return { ...doc, title: cleanText(doc.title).slice(0, limits.title_max), text };
 }
 
@@ -283,8 +281,12 @@ async function attachmentText(medplum: MedplumClient, doc: DocumentReference, si
   if (!attachment?.contentType?.startsWith('text/plain')) {
     throw new Unavailable('The discharge summary is not plain text');
   }
-  if (attachment.data) return Buffer.from(attachment.data, 'base64').toString('utf8');
-  if (attachment.url) return (await medplum.download(attachment.url, { signal, maxRetries: 0 })).text();
+  if (attachment.data) {
+    return Buffer.from(attachment.data, 'base64').toString('utf8');
+  }
+  if (attachment.url) {
+    return (await medplum.download(attachment.url, { signal, maxRetries: 0 })).text();
+  }
   throw new Unavailable('The discharge summary has no text');
 }
 
@@ -307,7 +309,9 @@ async function readChart(
     throw new Unavailable('This visit is not accessible');
   }
   const subject = encounter.subject?.reference;
-  if (!subject?.startsWith('Patient/')) throw new Unavailable('This visit is not accessible');
+  if (!subject?.startsWith('Patient/')) {
+    throw new Unavailable('This visit is not accessible');
+  }
 
   const [impression, requests, summaries] = await Promise.all([
     medplum.searchOne('ClinicalImpression', noteSearch(`Encounter/${encounterId}`, subject), {
@@ -333,15 +337,20 @@ async function readChart(
   ]);
 
   const noteText = (impression as ClinicalImpression | undefined)?.note?.[0]?.text?.trim();
-  if (!impression || !noteText) throw new Unavailable('No chart note has been saved for this visit yet');
+  if (!impression || !noteText) {
+    throw new Unavailable('No chart note has been saved for this visit yet');
+  }
   if (
     requests.bundle.link?.some((link) => link.relation === 'next') ||
     (requests.bundle.total !== undefined && requests.bundle.total > requests.length)
-  )
+  ) {
     throw new Unavailable('The active medication list exceeds the review search limit');
+  }
   const medications = await resolveMedications(medplum, requests, signal);
   const summary = summaries[0];
-  if (!summary) throw new Unavailable('No outside discharge summary is on file');
+  if (!summary) {
+    throw new Unavailable('No outside discharge summary is on file');
+  }
 
   const outside = checkDocument({
     title: summary.description ?? summary.type?.text ?? 'Discharge summary',
@@ -396,7 +405,11 @@ const MODAL_MESSAGES: Record<number, string> = {
   503: 'The self-hosted model is starting or unavailable; retry in a few minutes',
 };
 
-/** The HTTPS origin of a Modal Server, or undefined for anything else (paths, credentials, other hosts). */
+/**
+ * The HTTPS origin of a Modal Server, or undefined for anything else (paths, credentials, other hosts).
+ * @param value - The configured URL.
+ * @returns The origin, or undefined when the URL is not a Modal Server origin.
+ */
 export function modalOrigin(value: string): string | undefined {
   let url: URL;
   try {
@@ -416,12 +429,18 @@ export function modalOrigin(value: string): string | undefined {
   return valid ? url.origin : undefined;
 }
 
-/** The backend `setting` names: the Bot reads project secrets, the measure script the root .env. */
+/**
+ * The model service the settings name: the Bot reads project secrets, the measure script the root .env.
+ * @param setting - Reads a setting by name.
+ * @returns The service to call.
+ */
 export function modelService(setting: (name: string) => string | undefined): ModelService {
   const backend = setting('CONSISTENCY_BACKEND') ?? (setting('TYPESAFE_API_KEY') ? 'typesafe' : undefined);
   if (backend === 'typesafe') {
     const apiKey = setting('TYPESAFE_API_KEY');
-    if (!apiKey) throw new Unavailable('Missing string project secret: TYPESAFE_API_KEY');
+    if (!apiKey) {
+      throw new Unavailable('Missing string project secret: TYPESAFE_API_KEY');
+    }
     return {
       url: contract.endpoint,
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -434,12 +453,16 @@ export function modelService(setting: (name: string) => string | undefined): Mod
     const [url, key, secret] = ['CONSISTENCY_MODEL_URL', 'CONSISTENCY_MODAL_KEY', 'CONSISTENCY_MODAL_SECRET'].map(
       (name) => {
         const value = setting(name);
-        if (!value) throw new Unavailable(`Missing string project secret: ${name}`);
+        if (!value) {
+          throw new Unavailable(`Missing string project secret: ${name}`);
+        }
         return value;
       }
     );
     const origin = modalOrigin(url);
-    if (!origin) throw new Unavailable('CONSISTENCY_MODEL_URL must be the HTTPS Modal Server origin');
+    if (!origin) {
+      throw new Unavailable('CONSISTENCY_MODEL_URL must be the HTTPS Modal Server origin');
+    }
     return {
       url: `${origin}/v1/systemone`,
       headers: { 'Modal-Key': key, 'Modal-Secret': secret },
@@ -467,9 +490,13 @@ async function callModel(service: ModelService, body: unknown, deadline: number)
       } catch {
         throw new Unavailable(service.messages[0]);
       }
-      if (response.ok) return response.json();
+      if (response.ok) {
+        return response.json();
+      }
       if ((response.status === 429 || response.status === 529) && attempt === 0 && deadline - Date.now() > 2000) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1500);
+        });
         continue;
       }
       throw new Unavailable(service.messages[response.status] ?? 'The model service is unavailable');
@@ -491,9 +518,9 @@ function readChoice(
     !scores ||
     Object.keys(scores).sort().join(',') !== [...options].sort().join(',') ||
     !Object.values(scores).every(isProbability) ||
-    Math.abs(Object.values(scores as Record<string, number>).reduce((sum, n) => sum + n, 0) - 1) > 0.01 ||
+    Math.abs(Object.values<number>(scores).reduce((sum, n) => sum + n, 0) - 1) > 0.01 ||
     !options.includes(answer.choice) ||
-    scores[answer.choice] !== Math.max(...(Object.values(scores) as number[]))
+    scores[answer.choice] !== Math.max(...Object.values<number>(scores))
   ) {
     throw new Unavailable('The model returned an invalid answer');
   }
@@ -504,9 +531,14 @@ function readChoice(
  * The sentence a highlight answer picked: `null` when it answered that no sentence states a dose,
  * `undefined` when the answer is missing or unusable. Highlighting is optional: an unusable
  * answer drops the highlight, not the check.
+ * @param answer - The highlight answer.
+ * @param text - The document the sentences came from.
+ * @returns The sentence, `null` for none, `undefined` when unusable.
  */
 export function readSentence(answer: any, text: string): string | null | undefined {
-  if (!answer) return undefined;
+  if (!answer) {
+    return undefined;
+  }
   const sentences = splitSentences(text);
   try {
     const { choice } = readChoice(answer, [...sentences.map((_, n) => `s${n + 1}`), 'none']);
@@ -523,6 +555,12 @@ export function readSentence(answer: any, text: string): string | null | undefin
  * while their own highlight question found no dose sentence. The dose criteria say a missing
  * dose is insufficient information, so the Bot trusts the highlight answer over an `agreement`
  * label. It never downgrades `potential_conflict`. Hosted Jev labels that note correctly itself.
+ * @param answers - All answers of the model response.
+ * @param i - The medication's index in the request.
+ * @param medication - The medication's name.
+ * @param outsideText - The outside document text.
+ * @param noteText - The visit note text.
+ * @returns The medication's result.
  */
 export function doseResult(
   answers: Record<string, any>,
@@ -533,14 +571,16 @@ export function doseResult(
 ): ReviewResult {
   const { choice, probabilities } = readChoice(answers[`dose_${i}`], labels);
   const confidence = answers[`dose_${i}`].confidence;
-  if (!isProbability(confidence)) throw new Unavailable('The model returned an invalid answer');
+  if (!isProbability(confidence)) {
+    throw new Unavailable('The model returned an invalid answer');
+  }
   const outside = readSentence(answers[`sentence_outside_document_${i}`], outsideText);
   const note = readSentence(answers[`sentence_visit_note_${i}`], noteText);
   const ruled = choice === 'agreement' && (outside === null || note === null);
   return {
     medication,
-    choice: ruled ? 'insufficient_information' : (choice as Label),
-    probabilities: probabilities as Record<Label, number>,
+    choice: ruled ? 'insufficient_information' : choice,
+    probabilities: probabilities,
     confidence,
     sentence_outside: outside ?? undefined,
     sentence_note: note ?? undefined,
@@ -588,12 +628,16 @@ export async function review(medplum: MedplumClient, event: BotEvent, encounterI
 }
 
 export async function handler(medplum: MedplumClient, event: BotEvent): Promise<ReviewOutput> {
-  if (!event.requester) throw new Error('A signed-in demo user is required');
+  if (!event.requester) {
+    throw new Error('A signed-in demo user is required');
+  }
   const encounterId = parseInput(event.input);
   try {
     return await review(medplum, event, encounterId);
   } catch (err) {
-    if (err instanceof Unavailable) return { status: 'unavailable', reason: err.message };
+    if (err instanceof Unavailable) {
+      return { status: 'unavailable', reason: err.message };
+    }
     // Unknown failures can carry request details; return a fixed message instead.
     return { status: 'unavailable', reason: 'The check could not be completed' };
   }

@@ -441,24 +441,23 @@ describe('EncounterHeader', () => {
     expect(document.querySelector('[data-tour="visit-sign"]')).toBe(screen.getByRole('button', { name: 'Sign note' }));
   });
 
-  test('opens the sign dialog with a required reason when requested', async () => {
-    const onSign = vi.fn();
-    const { rerender } = setup({ encounter: { ...mockEncounter, status: 'finished' }, onSign });
-    expect(screen.queryByText('Reason for signing despite the consistency check')).not.toBeInTheDocument();
-    rerender(
-      <MemoryRouter>
-        <MedplumProvider medplum={medplum}>
-          <MantineProvider>
-            <EncounterHeader
-              encounter={{ ...mockEncounter, status: 'finished' }}
-              onSign={onSign}
-              signReasonRequest={1}
-            />
-          </MantineProvider>
-        </MedplumProvider>
-      </MemoryRouter>
-    );
+  test('lets the chart open the sign dialog with a required reason', async () => {
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    setup({
+      encounter: { ...mockEncounter, status: 'finished' },
+      signDialogOpened: true,
+      onSignDialogOpen: onOpen,
+      onSignDialogClose: onClose,
+      requireSignReason: true,
+    });
     expect(await screen.findByText('Reason for signing despite the consistency check')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign & Lock Note' })).toBeDisabled();
+
+    // The header's own lock button and the dialog's close go through the chart.
+    await userEvent.click(screen.getByRole('button', { name: 'Sign note' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
