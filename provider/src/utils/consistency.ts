@@ -1,5 +1,5 @@
 import type { MedplumClient, WithId } from '@medplum/core';
-import { createReference, getReferenceString } from '@medplum/core';
+import { createReference } from '@medplum/core';
 import type {
   ClinicalImpression,
   DetectedIssue,
@@ -149,6 +149,7 @@ export function readStoredCheck(issue: DetectedIssue): StoredCheck | undefined {
 
 /** A versioned reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
 export interface ImplicatedSource {
+  reference: string;
   id: string;
   versionId: string;
 }
@@ -156,7 +157,7 @@ export interface ImplicatedSource {
 function implicatedSource(issue: DetectedIssue, resourceType: string): ImplicatedSource | undefined {
   const pattern = new RegExp(`^${resourceType}/([^/]+)/_history/([^/]+)$`);
   const match = issue.implicated?.map((r) => pattern.exec(r.reference ?? '')).find(Boolean);
-  return match ? { id: match[1], versionId: match[2] } : undefined;
+  return match ? { reference: match[0], id: match[1], versionId: match[2] } : undefined;
 }
 
 export function implicatedNote(issue: DetectedIssue): ImplicatedSource | undefined {
@@ -167,14 +168,22 @@ export function implicatedDocument(issue: DetectedIssue): ImplicatedSource | und
   return implicatedSource(issue, 'DocumentReference');
 }
 
-/** The version of a source that a check read, or undefined when it cannot be loaded. */
+/**
+ * The version of a source that a check read, or undefined when it cannot be loaded.
+ *
+ * @param medplum - The Medplum client.
+ * @param resourceType - The source's resource type.
+ * @param reference - The versioned reference, as `implicatedNote` or `implicatedDocument` return it.
+ * @returns The source at that version.
+ */
 export async function readCheckedVersion<K extends 'ClinicalImpression' | 'DocumentReference'>(
   medplum: MedplumClient,
   resourceType: K,
-  source: ImplicatedSource
+  reference: string
 ): Promise<ExtractResource<K> | undefined> {
+  const [, id, , versionId] = reference.split('/');
   try {
-    return await medplum.readVersion(resourceType, source.id, source.versionId);
+    return await medplum.readVersion(resourceType, id, versionId);
   } catch {
     return undefined;
   }
@@ -182,12 +191,12 @@ export async function readCheckedVersion<K extends 'ClinicalImpression' | 'Docum
 
 export async function findLatestCheck(
   medplum: MedplumClient,
-  encounter: WithId<Encounter>
+  encounterId: string
 ): Promise<WithId<DetectedIssue> | undefined> {
   return medplum.searchOne(
     'DetectedIssue',
     // Sort by identification time: adding a mitigation changes _lastUpdated of an older check.
-    { implicated: getReferenceString(encounter), code: `${CHECK_CODE_SYSTEM}|${CHECK_CODE}`, _sort: '-identified' },
+    { implicated: `Encounter/${encounterId}`, code: `${CHECK_CODE_SYSTEM}|${CHECK_CODE}`, _sort: '-identified' },
     { cache: 'no-cache' }
   );
 }
