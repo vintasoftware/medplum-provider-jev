@@ -3,7 +3,7 @@
 //
 //   npm --prefix provider run measure                     # hosted Jev, one round
 //   npm --prefix provider run measure -- --rounds 3
-//   npm --prefix provider run measure -- --backend modal  # Decider on the private Modal Server
+//   npm --prefix provider run measure -- --backend modal  # the self-hosted model on the private Modal Server
 //
 // Hosted Jev needs TYPESAFE_API_KEY; Modal needs CONSISTENCY_MODEL_URL, CONSISTENCY_MODAL_KEY
 // and CONSISTENCY_MODAL_SECRET, in the environment or the root .env. Writes
@@ -106,7 +106,7 @@ export function modalEndpoint(url: string, key: string, secret: string): Endpoin
     throw new Error('Set CONSISTENCY_MODEL_URL to the HTTPS Modal Server origin');
   }
   return {
-    name: 'self-hosted Decider',
+    name: 'self-hosted model',
     url: `${origin}/v1/systemone`,
     headers: { 'Modal-Key': key, 'Modal-Secret': secret },
     noDoseRule: true,

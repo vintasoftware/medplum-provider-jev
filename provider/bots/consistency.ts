@@ -7,7 +7,7 @@ import contract from '../src/data/model-contract.json' with { type: 'json' };
 // documents agree about each medication's dose, and returns the result. It writes nothing:
 // the review card stores the result as a DetectedIssue under the user's own access.
 //
-// The model is hosted Jev or Decider on a private Modal Server (see SELF-HOSTING.md). Both
+// The model is hosted Jev or Jebadiah on a private Modal Server (see SELF-HOSTING.md). Both
 // take the same /v1/systemone request; the CONSISTENCY_BACKEND project secret picks one.
 
 const DISCHARGE_SUMMARY_TYPE = 'http://loinc.org|18842-5';
@@ -357,9 +357,9 @@ function selectedSentence(answer: any, text: string): string | undefined {
  * Whether the highlight questions answered that no sentence of one document states a dose of
  * medication `i`. An unusable or missing answer counts as no evidence.
  *
- * Decider can label a note with no dose `agreement` while its own highlight question finds no
- * dose sentence. Its dose criteria say a missing dose is insufficient information, so for that
- * backend the Bot trusts the highlight answer over the dose label.
+ * Jebadiah, AutoJev and Decider each labeled a note with no dose `agreement` while their own
+ * highlight question found no dose sentence. The dose criteria say a missing dose is insufficient
+ * information, so for the self-hosted backend the Bot trusts the highlight answer over the label.
  */
 export function noDoseSentence(
   answers: Record<string, any>,

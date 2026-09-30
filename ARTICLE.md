@@ -1,6 +1,6 @@
 # A Jev-like AI for healthcare: checking visit notes against discharge summaries in Medplum
 
-*Updated September 29, 2026. This demo uses synthetic data only.*
+*Updated September 30, 2026. This demo uses synthetic data only.*
 
 A patient comes back to primary care one week after a hospital stay for high blood pressure. The hospital raised their lisinopril from 10 mg to 20 mg. The clinic's chart still lists 10 mg, and a busy provider copies that dose into the visit plan.
 
@@ -50,7 +50,7 @@ For this check, the choices are `agreement`, `potential_conflict` and `insuffici
 
 The Bot gathers the evidence for these questions from Medplum. It accepts only `{ "action": "review_encounter", "encounter_id": ... }` and runs as the signed-in user through [`runAsUser`](https://www.medplum.com/docs/bots/bot-run-as-user). It can therefore read only what the provider can read. It loads the visit, newest note, active medications and newest current discharge summary, then enforces text limits before sending a request.
 
-![Architecture: (1) the Provider App triggers the check; (2) a Medplum Bot running as the signed-in user reads the note, active medications and discharge summary and writes nothing; (3) hosted Jev, or Decider on Modal, answers typed questions; (4) the review card shows the result; (5) FHIR records are written as the provider.](article/images/architecture.png)
+![Architecture: (1) the Provider App triggers the check; (2) a Medplum Bot running as the signed-in user reads the note, active medications and discharge summary and writes nothing; (3) hosted Jev, or Jebadiah on Modal, answers typed questions; (4) the review card shows the result; (5) FHIR records are written as the provider.](article/images/architecture.png)
 
 That request asks three kinds of questions. One Choice per medication supplies the dose label. A yes/no question asks whether the note mentions the hospital stay, which affects the card's wording. Further Choice questions select from numbered sentences in each document, giving the card its highlights. The card also exposes the label probabilities so the provider can inspect the model's answer alongside the source text.
 
@@ -118,26 +118,29 @@ There are still checks to complete. The policy's refusals for secrets, admin rou
 
 ## Evaluating an open model
 
-Hosted Jev runs the working demo. To explore running the model in our own account, we also deployed the Apache-2.0 Decider model on a private Modal GPU. That endpoint has produced one verified prediction: for two same-day discharge documents listing 10 mg and 20 mg, it returned `potential_conflict` at 0.711, using 186 input tokens and 829.1 ms of server-side inference. It now also accepts the Bot's own request, so the guided visit runs on it. On the five authored dose cases and four scenario notes, every highlight picked the expected sentence and seven labels matched the authored reference. It flagged both dated dose changes as conflicts, and it labeled the note with no dose `agreement` even though its own highlight found no dose sentence; for this backend the Bot reports that case as insufficient information. Warm checks took about 0.4 s. [SELF-HOSTING.md](SELF-HOSTING.md) describes that deployment and its limits.
+Hosted Jev runs the working demo. To explore running the model in our own account, we deployed open models on a private Modal GPU behind the same `/v1/systemone` request, so the guided visit runs on them unchanged. We took candidates with downloadable weights from the September 28 [Decision Index](https://huggingface.co/spaces/multimodalart/jev-decision-index) and ran the Bot's own requests for the five authored dose cases and the four scenario notes:
 
-![One project secret, CONSISTENCY_BACKEND, switches between hosted Jev (the default, which runs the guided demo: an API key, per-request cost, PHI needs a BAA or DPA with TypeSafe) and Decider on Modal (under evaluation: the same request, an open checkpoint on a private GPU Server, about $4.29 per warm GPU hour and scaling to zero, PHI under Modal's Enterprise BAA plus Medplum's BAA plan).](article/images/backends.png)
+| Model | Decision Index | NLI4CT | Calibration error | Labels matching the reference | Highlights |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Jebadiah 27B** | 54.67 | 0.832 | **0.014** | **8 of 9** | 18 of 18 |
+| AutoJev-27B | 56.40 | **0.848** | 0.018 | 7 of 9 | 18 of 18 |
+| Decider-35B-A3B NVFP4 | 47.11 | 0.785 | 0.023 | 7 of 9 | 18 of 18 |
+| Jebadiah 9B v2 | not listed | | | 6 of 9 | 17 of 18 |
+| Hosted Jev, for comparison | reference | 0.841 | | 8 of 9 | 18 of 18 |
 
-We chose Decider after inspecting all 31 open entries in the September 22 Decision Index snapshot. Among trained entries, its NVFP4 configuration led the headline index:
+The self-hosted labels include one answer rule. Jebadiah 27B, AutoJev and Decider each labeled the note with no dose `agreement` while their own highlight question found no dose sentence, so for this backend the Bot reports that case as insufficient information. Hosted Jev gets it right without the rule.
 
-| Trained candidate | Decision Index | ContractNLI F1 | NLI4CT F1 |
-| --- | ---: | ---: | ---: |
-| Decider-35B-A3B NVFP4 | 54.34 | 0.7496 | 0.7847 |
-| Kev-9B, raised limits | 50.48 | 0.5777 | 0.7486 |
-| Solomon, BF16 encoding | 47.51 | 0.7153 | **0.8176** |
-| Decider-2B, FP8 HTTP | 44.00 | 0.6340 | 0.6547 |
+We use Jebadiah 27B. It matched hosted Jev's count, and its calibration error is the lowest among the top entries, which matters because the card shows the probabilities. AutoJev-27B ranks higher on the index and on clinical-trial statements (NLI4CT), but on our cases it mislabeled both dated dose changes, one of them at 0.99. The index's top entry, Surogate Rune, is gated and has a calibration error of 0.12. Jebadiah's remaining miss is a dated change with no explanation, which it flagged as a conflict (0.94) where the reference expects insufficient information.
 
-Decider fine-tunes part of a mixture-of-experts base model while freezing the routed experts, then scores option tokens at a trained answer position. The "35B-A3B" name means roughly 35 billion parameters with 3 billion active per token. It still needs memory for the full 35B model. Its Apache-2.0 license makes it suitable for a reproducible open implementation. [Decider](https://github.com/Mapika/decider), [model card](https://huggingface.co/Mapika/decider-35b-a3b).
+Jebadiah fine-tunes Qwen3.8-27B and reads each question's option logits in one forward pass, with a temperature fitted per question type. Its 56 GB of BF16 weights fit one A100 80 GB, about $3.16 per warm hour at list prices, scaling to zero between uses. Warm checks take 0.5–0.7 s; a cold start, including a kernel warm-up, takes three to four minutes. It runs behind its authors' own server, pinned to a reviewed commit. [Model card](https://huggingface.co/frontier-infra/jebadiah-27b), [server](https://github.com/getainode/jebadiah), [SELF-HOSTING.md](SELF-HOSTING.md).
 
-The index helped narrow the candidates, but it does not answer which one is best for this check. ContractNLI measures legal document entailment; NLI4CT measures clinical-trial statements. Neither measures medication reconciliation, and the entries use different hardware. Decider's own evidence shows weaker temporal and numerical reasoning, both relevant to deciding which dose a document describes. That is another reason to keep both passages visible to the provider. The [index data](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/index.json) and [methodology](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/methodology.json) provide the comparison's context.
+![One project secret, CONSISTENCY_BACKEND, switches between hosted Jev (the default, which runs the guided demo: an API key, per-request cost, PHI needs a BAA or DPA with TypeSafe) and Jebadiah on Modal (the same request, an open checkpoint on a private GPU Server, about $3.16 per warm GPU hour and scaling to zero, PHI under Modal's Enterprise BAA plus Medplum's BAA plan).](article/images/backends.png)
 
-There are alternatives worth testing on the same task. [Kev-9B](https://huggingface.co/jaredpalmer/kev-9b) is smaller, though its author documents date-related weaknesses. ZefanCai's [Open-Jev-9B](https://huggingface.co/ZefanCai/Open-Jev-9B) and 27B-v1.1 publish held-out results but were absent from the snapshot.
+Nine authored cases cannot tell these models apart with confidence, and the index does not answer which one is best for this check either. ContractNLI measures legal document entailment; NLI4CT measures clinical-trial statements. Neither measures medication reconciliation, and the entries use different hardware. Our cases point to dated dose changes as a weak spot, which is another reason to keep both passages visible to the provider. The [index data](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/index.json) and [methodology](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/methodology.json) provide the comparison's context.
 
-[DoccyHealth's Solomon](https://huggingface.co/DoccyHealth/Solomon) deserves a closer comparison because it outperforms Decider on NLI4CT and was built for document-grounded healthcare questions. It uses trained answer heads and an adapter, with reusable document states and optional evidence pointers. Adopting it would require its own runtime and state-cache hosting. Its published validation covers 802 questions over 54 real documents, with AI-generated labels that were not human-verified, so it too needs a task-specific evaluation with clinicians.
+There are alternatives worth testing on the same task. [Kev-9B](https://huggingface.co/jaredpalmer/kev-9b) is smaller, though its author documents date-related weaknesses. ZefanCai's [Open-Jev-9B](https://huggingface.co/ZefanCai/Open-Jev-9B) and 27B-v1.1 publish held-out results but were absent from the September 28 snapshot.
+
+[DoccyHealth's Solomon](https://huggingface.co/DoccyHealth/Solomon) deserves a closer comparison because it was built for document-grounded healthcare questions. It uses trained answer heads and an adapter, with reusable document states and optional evidence pointers. Adopting it would require its own runtime and state-cache hosting. Its published validation covers 802 questions over 54 real documents, with AI-generated labels that were not human-verified, so it too needs a task-specific evaluation with clinicians.
 
 A separate group of projects explores decision-oriented inference with existing weights, without training a new checkpoint. [JevFire](https://github.com/kikoncuo/jevfire) and [Simple Jev](https://github.com/featherless-ai/simple-jev) take this approach. JevFire's announcement claims a large speedup, browser execution and image support, but those claims refer to different configurations and are not measurements of this demo.
 
@@ -153,7 +156,7 @@ Those agreements would cover only part of the work needed for patient data. The 
 
 ## Taking the demo further
 
-The immediate next step for Decider is a larger evaluation on the same workflow as hosted Jev, with clinician-reviewed labels. The first run already shows where to look: missing doses and dated changes. [SELF-HOSTING.md](SELF-HOSTING.md#5-run-the-guided-demo-on-it) shows how to switch the demo to it.
+The immediate next step for Jebadiah is a larger evaluation on the same workflow as hosted Jev, with clinician-reviewed labels. The first runs already show where to look: missing doses and dated changes. [SELF-HOSTING.md](SELF-HOSTING.md#5-run-the-guided-demo-on-it) shows how to switch the demo to it.
 
 The workflow could also support a different check: whether a signed note and its addenda support the diagnoses submitted on a claim. Before **Submit Claim** in Details & Billing, a Bot could ask one Choice per diagnosis the provider added: `supported`, `not_supported` or `insufficient_documentation`. The provider would resolve each result with an addendum or by removing the diagnosis; the model would never propose or change a code. We estimate two to three days of implementation on top of this demo.
 

@@ -1,37 +1,82 @@
-"""Private GPU inference pinned to US compute."""
+"""Private GPU inference pinned to US compute: Jebadiah 27B behind its own /v1/systemone server.
+
+    HUGGING_FACE_TOKEN=hf_... modal run -m demo.modal_app   # stage and verify the weights
+    modal deploy -m demo.modal_app
+"""
+import json
+import os
 import subprocess
-import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
 import modal
 
-from demo.config import VLLM_IMAGE
+MODEL_ID = 'frontier-infra/jebadiah-27b'
+MODEL_REVISION = '3dd6f22cd54d83c5f665b1ad2f6b7183e8f96bed'
+SERVER_COMMIT = 'cc904344061e4ee71d2cb8297eafd2ce1c798f99'  # github.com/getainode/jebadiah
+MODEL_PATH = f'/models/{MODEL_REVISION}'
+SERVER = '/opt/jebadiah/server'
+LOCAL = 'http://127.0.0.1:8000'
 
 app = modal.App('healthcare-consistency')
-weights = modal.Volume.from_name('healthcare-decider-weights-v2', create_if_missing=True, version=2)
-# The pinned vLLM runtime provides python3; Modal also requires a python alias.
-gpu_image = (modal.Image.from_registry(VLLM_IMAGE, setup_dockerfile_commands=[
-    'RUN ln -s /usr/bin/python3 /usr/local/bin/python && python -m pip --version',
-]).entrypoint([])
-    .pip_install('fastapi==0.141.1', 'uvicorn==0.53.0', 'httpx==0.28.1')
+weights = modal.Volume.from_name('healthcare-jebadiah-weights-v2', create_if_missing=True, version=2)
+gpu_image = (modal.Image.debian_slim(python_version='3.12')
+    .apt_install('git')
+    .pip_install('uv==0.12.21')
     .run_commands(
-        '''python -c "import fastapi, httpx, uvicorn; from importlib.metadata import version; assert version('vllm').split('+')[0] == '0.29.0'; print('vLLM', version('vllm'), 'torch', version('torch'))"'''
+        f'git clone https://github.com/getainode/jebadiah.git /opt/jebadiah && git -C /opt/jebadiah checkout {SERVER_COMMIT}',
+        f'cd {SERVER} && uv sync --frozen --no-dev --extra cuda',
     )
-    .env({'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'VLLM_NO_USAGE_STATS': '1',
-          'DO_NOT_TRACK': '1', 'HF_HUB_DISABLE_TELEMETRY': '1'})
-    .add_local_python_source('demo'))
+    .env({'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'HF_HUB_DISABLE_TELEMETRY': '1', 'DO_NOT_TRACK': '1'}))
 stage_image = (modal.Image.debian_slim(python_version='3.12')
     .pip_install('huggingface-hub==1.32.0').add_local_python_source('demo'))
 
+# Anonymous Hub downloads from Modal get rate limited (429); a read token avoids that. Only
+# `modal run` needs it, so a deploy without the variable keeps the token out of the app. The
+# secret sets the same variable in the container, so both sides define the same objects.
+hub_token = [modal.Secret.from_local_environ(['HUGGING_FACE_TOKEN'])] if os.environ.get('HUGGING_FACE_TOKEN') else []
+
 
 @app.function(image=stage_image, volumes={'/models': weights}, region='us', timeout=3600,
-              cpu=2, memory=4096, max_containers=1)
+              cpu=2, memory=4096, max_containers=1, secrets=hub_token)
 def stage_model():
-    from demo.stage import stage
-    result = stage()
+    from demo.stage import stage_snapshot
+    if 'HUGGING_FACE_TOKEN' in os.environ:
+        os.environ['HF_TOKEN'] = os.environ.pop('HUGGING_FACE_TOKEN')
+    checked = stage_snapshot(MODEL_ID, MODEL_REVISION, MODEL_PATH)
+    Path(MODEL_PATH, 'VERIFIED_REVISION').write_text(MODEL_REVISION + '\n')
     weights.commit()
-    return result
+    return {'revision': MODEL_REVISION, 'verified_files': checked}
 
 
-@app.server(image=gpu_image, gpu='RTX-PRO-6000', cpu=4, memory=65536,
+def warm_up_requests():
+    """Synthetic requests across the Bot's shapes: 1 or 8 questions, prompts up to the 4,096-token cap."""
+    for sentences in (6, 24, 64, 128, 150):  # about 24 tokens each across both documents
+        text = ' '.join(f'Warm-up sentence {n} takes 5 mg daily.' for n in range(sentences))
+        for count in (1, 8):
+            yield {'model': 'jev-latest',
+                   'state': {'outside_document': {'text': text}, 'visit_note': {'text': text}},
+                   'questions': {f'q{n}': {'type': 'choice', 'instructions': 'Do the documents agree?',
+                                           'criteria': {'yes': 'They agree.', 'no': 'They differ.'}}
+                                 for n in range(count)}}
+
+
+def local(path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(LOCAL + path, data, {'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+    except OSError:
+        return None
+
+
+# Weights load straight onto the GPU (53 GB of VRAM in use), so host RAM stays near 5 GiB.
+@app.server(image=gpu_image, gpu='A100-80GB', cpu=4, memory=8192,
             volumes={'/models': weights.with_mount_options(read_only=True)},
             compute_region='us', routing_region='us-east', startup_timeout=1800,
             target_concurrency=1, min_containers=0, max_containers=1,
@@ -39,7 +84,24 @@ def stage_model():
 class Inference:
     @modal.enter()
     def start(self):
-        self.process = subprocess.Popen([sys.executable, '-m', 'demo.gpu_api'])
+        if Path(MODEL_PATH, 'VERIFIED_REVISION').read_text().strip() != MODEL_REVISION:
+            raise ValueError('Stage and verify the pinned model before serving')
+        # The server refuses to start if the model's prompt_contract.json disagrees with its renderer.
+        # `jev-latest` is the model name the Bot sends; the server answers only for its one model.
+        self.process = subprocess.Popen([
+            f'{SERVER}/.venv/bin/jebadiah-serve', '--model', MODEL_PATH, '--host', '0.0.0.0', '--port', '8000',
+            '--device', 'cuda', '--dtype', 'bfloat16', '--max-prompt-tokens', '4096',
+            '--alias', 'jebadiah', '--alias', 'jev-latest', '--log-level', 'warning'])
+        while local('/health') != 200:
+            if self.process.poll() is not None:
+                raise RuntimeError('jebadiah-serve exited during loading')
+            time.sleep(2)
+        # The linear-attention kernels compile per shape on first use, which made the first requests
+        # take 10–37 s, past the Bot's 8 s timeout. The Server takes traffic only after this returns.
+        started = time.monotonic()
+        statuses = [local('/v1/systemone', body) for body in warm_up_requests()]
+        print(f'warm-up: {len(statuses)} requests, statuses {sorted(set(map(str, statuses)))}, '
+              f'{time.monotonic() - started:.0f} s', flush=True)
 
     @modal.exit()
     def stop(self):

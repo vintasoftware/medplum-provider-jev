@@ -1,3 +1,1 @@
 modal==1.5.5
-fastapi==0.141.1
-httpx==0.28.1

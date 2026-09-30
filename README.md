@@ -11,7 +11,7 @@ Synthetic data only. One synthetic run is not clinical validation. Validate it w
 ## More info
 
 - [ARTICLE.md](ARTICLE.md): why this workflow, how it works, model choices, results and limits.
-- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Decider model on a private Modal GPU instead of hosted Jev for proper HIPAA compliance.
+- [SELF-HOSTING.md](SELF-HOSTING.md): running the open Jebadiah 27B model on a private Modal GPU instead of hosted Jev for proper HIPAA compliance.
 
 ## Quick start
 

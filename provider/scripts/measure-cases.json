@@ -1,5 +1,5 @@
 {
-  "_about": "Inputs for npm --prefix provider run measure. The authored cases copy the medication-dose cases in demo/cases.py (tests/test_demo.py keeps them equal). `expected` is an authored synthetic reference, not clinician-validated; `highlight` is a substring of the sentence a reader expects highlighted, or null when no sentence gives a dose.",
+  "_about": "Inputs for npm --prefix provider run measure. The authored cases are five medication-dose pairs; the scenario notes are the guided demo's. `expected` is an authored synthetic reference, not clinician-validated; `highlight` is a substring of the sentence a reader expects highlighted, or null when no sentence gives a dose.",
   "scenario": {
     "medication": "lisinopril",
     "discharge_date": "2026-09-16",
