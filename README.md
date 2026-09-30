@@ -71,7 +71,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 2. Set the status (upper right) to **In Progress** and write the note: BP 138/86, no dizziness, tolerating medications. Take the plan from the chart's list, as a busy provider might: "continue lisinopril 10 mg daily".
 3. Set the visit to **Finished**. The note is saved and checked once. The review card shows **Potential conflict**, both passages with the dose sentences highlighted, and **Details** (scores, model, tokens).
 4. Handle it. **Edit note** (then **Check note**), **Sign with a documented reason** (the reason is required and recorded on the signature), or **Create reconciliation task** (it stays open after Sign & Lock). There is no Dismiss, and signing is never blocked.
-5. Edit the plan to "Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.", press **Check note** to get **Agreement**, then click the lock and **Sign & Lock Note**. The visit shows the signature, and the check stays on the visit (the Timeline lists notes, not signatures or checks). The model changed nothing in the chart.
+5. Edit the plan to "Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks.", press **Check note** to get **Agreement**, then click the lock and **Sign & Lock Note**. The visit shows the signature, and the check stays on the visit (the Timeline lists notes, not signatures or checks). The model changed nothing in the chart.
 
 **Side paths** (same patient, before signing; press **Check note** after each edit):
 
