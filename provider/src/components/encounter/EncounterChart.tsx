@@ -5,7 +5,7 @@ import { useDebouncedCallback } from '@mantine/hooks';
 import type { WithId } from '@medplum/core';
 import { createReference, getReferenceString } from '@medplum/core';
 import type { DetectedIssue, Encounter, Patient, Practitioner, Provenance, Reference, Task } from '@medplum/fhirtypes';
-import { Loading, useMedplum, useResource } from '@medplum/react';
+import { Loading, useMedplum } from '@medplum/react';
 import { IconStethoscope } from '@tabler/icons-react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -66,15 +66,6 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
   const [reviewIssue, setReviewIssue] = useState<WithId<DetectedIssue>>();
   const [signReasonSeq, setSignReasonSeq] = useState(0);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
-  // A Task from the route opens only when it belongs to this visit and, if it names one, its patient.
-  const routeTask = useResource(taskProp, showErrorNotification);
-  const selectedTask =
-    routeTask &&
-    encounter &&
-    routeTask.encounter?.reference === getReferenceString(encounter) &&
-    (!routeTask.for || routeTask.for.reference === encounter.subject?.reference)
-      ? routeTask
-      : undefined;
 
   useEffect(() => {
     if (!encounter) {
@@ -364,7 +355,9 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
           )}
         </Box>
       </Stack>
-      {selectedTask && <TaskDetailsModal key={selectedTask.id} task={selectedTask} onUpdateTask={updateTaskList} />}
+      {taskProp && (
+        <TaskDetailsModal key={getReferenceString(taskProp)} task={taskProp} onUpdateTask={updateTaskList} />
+      )}
     </>
   );
 };

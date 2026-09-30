@@ -85,8 +85,7 @@ export function DocumentsPage(): JSX.Element {
     [patientId, location.search]
   );
 
-  // Resolve an out-of-list selection silently (a stale/deleted id shouldn't toast). A document
-  // read by id is shown only when it belongs to the route patient, like the list.
+  // Resolve an out-of-list selection silently (a stale/deleted id shouldn't toast).
   const resolveSelected = useCallback(
     async (
       id: string,
@@ -98,13 +97,12 @@ export function DocumentsPage(): JSX.Element {
         return found;
       }
       try {
-        const doc = await client.readResource('DocumentReference', id);
-        return doc.subject?.reference === `Patient/${patientId}` ? doc : undefined;
+        return await client.readResource('DocumentReference', id);
       } catch {
         return undefined;
       }
     },
-    [patientId]
+    []
   );
 
   const handleCreated = (doc: DocumentReference): void => {
