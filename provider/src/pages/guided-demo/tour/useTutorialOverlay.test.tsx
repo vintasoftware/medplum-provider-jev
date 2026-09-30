@@ -1,5 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { JSX } from 'react';
+import type { RenderHookResult } from '@testing-library/react';
+import { act, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
+import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -13,8 +14,6 @@ const IDS = { patientId: 'p1', encounterId: 'e1' };
 const EMPTY: ScenarioState = { encounterStatus: 'planned', noteSaved: false, checks: [], signed: false };
 const stepIndex = (id: string): number => STEPS.findIndex((s) => s.id === id);
 
-let overlay: TutorialOverlay;
-let latest: { tutorial: TutorialMode; acknowledged: string[] };
 const onStatusClick = vi.fn();
 
 function Chart(): JSX.Element {
@@ -41,10 +40,22 @@ function Visit(): JSX.Element {
   );
 }
 
-function Harness(props: { step: string; tutorial?: TutorialMode; state?: ScenarioState }): JSX.Element {
-  const [tutorial, setTutorialState] = useState<TutorialMode>(props.tutorial ?? 'active');
+interface HarnessProps {
+  step: string;
+  tutorial?: TutorialMode;
+  state?: ScenarioState;
+}
+
+interface Harness {
+  overlay: TutorialOverlay;
+  tutorial: TutorialMode;
+  acknowledged: string[];
+}
+
+/** The overlay on a fixed step, with the controller state the overlay may change. */
+function useHarness(props: HarnessProps): Harness {
+  const [tutorial, setTutorial] = useState<TutorialMode>(props.tutorial ?? 'active');
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
-  latest = { tutorial, acknowledged };
   const controller: GuidedDemoController = {
     scenario: { ...IDS, tutorial, acknowledged },
     serverState: props.state ?? EMPTY,
@@ -53,24 +64,23 @@ function Harness(props: { step: string; tutorial?: TutorialMode; state?: Scenari
     start: vi.fn(),
     end: vi.fn(),
     acknowledge: (id) => setAcknowledged((a) => [...a, id]),
-    setTutorial: setTutorialState,
+    setTutorial,
     refresh: vi.fn(),
   };
-  overlay = useTutorialOverlay(controller);
-  return (
-    <Routes>
-      <Route path="/visit" element={<Visit />} />
-      <Route path="*" element={<Chart />} />
-    </Routes>
-  );
+  return { overlay: useTutorialOverlay(controller), tutorial, acknowledged };
 }
 
-function setup(props: Parameters<typeof Harness>[0]): ReturnType<typeof render> {
-  return render(
+function setup(props: HarnessProps): RenderHookResult<Harness, unknown> {
+  const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
     <MemoryRouter initialEntries={['/']}>
-      <Harness {...props} />
+      {children}
+      <Routes>
+        <Route path="/visit" element={<Visit />} />
+        <Route path="*" element={<Chart />} />
+      </Routes>
     </MemoryRouter>
   );
+  return renderHook(() => useHarness(props), { wrapper });
 }
 
 const popover = (): HTMLElement | null => document.querySelector('.driver-popover');
@@ -96,25 +106,25 @@ describe('useTutorialOverlay', () => {
     ['backdrop click', () => fireEvent.click(document.querySelector('.driver-overlay path') as Element)],
     ['Skip button', () => fireEvent.click(screen.getByRole('button', { name: 'Skip tutorial' }))],
   ])('%s hides the tutorial at once', async (_name, exit) => {
-    setup({ step: 'medications' });
+    const { result } = setup({ step: 'medications' });
     await waitFor(() => expect(highlighted()).toBe(true));
     act(() => exit());
     expect(highlighted()).toBe(false);
     expect(popover()).toBeNull();
-    expect(latest.tutorial).toBe('dismissed');
+    expect(result.current.tutorial).toBe('dismissed');
 
     // Resume re-highlights the same step.
-    act(() => overlay.showMe());
+    act(() => result.current.overlay.showMe());
     await waitFor(() => expect(highlighted()).toBe(true));
-    expect(latest.tutorial).toBe('active');
+    expect(result.current.tutorial).toBe('active');
     expect(popover()).toHaveTextContent('The chart lists lisinopril 10 mg');
   });
 
   test('a reading step keeps its content usable', async () => {
-    setup({ step: 'medications' });
+    const reading = setup({ step: 'medications' });
     await waitFor(() => expect(highlighted()).toBe(true));
     expect(document.querySelector('[data-tour="patient-summary"]')).toHaveClass('driver-no-interaction');
-    cleanup();
+    reading.unmount();
     setup({ step: 'read-summary' });
     await waitFor(() => expect(popover()).toHaveTextContent('The discharge summary'));
     const panel = document.querySelector('[data-tour="document-detail"]');
@@ -123,21 +133,21 @@ describe('useTutorialOverlay', () => {
   });
 
   test('Next acknowledges an informational step', async () => {
-    setup({ step: 'welcome' });
+    const { result } = setup({ step: 'welcome' });
     await waitFor(() => expect(popover()).toHaveTextContent('Post-discharge follow-up'));
     act(() => fireEvent.click(screen.getByRole('button', { name: 'Next' })));
-    expect(latest.acknowledged).toEqual(['welcome']);
+    expect(result.current.acknowledged).toEqual(['welcome']);
   });
 
   test('an act step removes the highlight before the control handles the click', async () => {
-    setup({ step: 'start-visit' });
+    const { result } = setup({ step: 'start-visit' });
     await waitFor(() => expect(popover()).toHaveTextContent('Set the visit to In Progress'));
     // Act steps offer Skip but no Next: the step finishes from server state.
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Planned' }));
     expect(onStatusClick).toHaveBeenCalledWith(false);
     expect(highlighted()).toBe(false);
-    expect(latest.tutorial).toBe('active');
+    expect(result.current.tutorial).toBe('active');
   });
 
   test('a route change re-highlights once the new anchor mounts', async () => {
@@ -152,26 +162,27 @@ describe('useTutorialOverlay', () => {
 
   test('a missing anchor falls back to text', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    setup({ step: 'handle', state: { ...EMPTY, encounterStatus: 'finished', noteSaved: true } });
-    expect(overlay.missingAnchor).toBe(false);
+    const { result } = setup({ step: 'handle', state: { ...EMPTY, encounterStatus: 'finished', noteSaved: true } });
+    expect(result.current.overlay.missingAnchor).toBe(false);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5001);
     });
-    expect(overlay.missingAnchor).toBe(true);
+    expect(result.current.overlay.missingAnchor).toBe(true);
     expect(highlighted()).toBe(false);
   });
 
-  test('stays hidden while dismissed and waits on server state', async () => {
+  test('stays hidden while dismissed', async () => {
     setup({ step: 'medications', tutorial: 'dismissed' });
     await act(async () => undefined);
     expect(highlighted()).toBe(false);
-    setupWaiting();
+  });
+
+  test('waits on server state before highlighting a reading step', () => {
+    const { result } = setup({
+      step: 'review-card',
+      state: { ...EMPTY, encounterStatus: 'finished', noteSaved: true },
+    });
+    expect(result.current.overlay.waiting).toBe(true);
+    expect(highlighted()).toBe(false);
   });
 });
-
-function setupWaiting(): void {
-  cleanup();
-  setup({ step: 'review-card', state: { ...EMPTY, encounterStatus: 'finished', noteSaved: true } });
-  expect(overlay.waiting).toBe(true);
-  expect(highlighted()).toBe(false);
-}

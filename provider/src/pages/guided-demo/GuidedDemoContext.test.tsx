@@ -4,10 +4,10 @@ import { createReference } from '@medplum/core';
 import type { ClinicalImpression, Practitioner } from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { MedplumProvider } from '@medplum/react';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import type { JSX } from 'react';
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
+import type { RenderHookResult } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { JSX, ReactNode } from 'react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION } from '../../utils/consistency';
 import { buildSignatureProvenance } from '../../utils/encounter';
@@ -23,37 +23,35 @@ import { seedScenario } from './seedScenario';
 
 let medplum: MockClient;
 let practitioner: WithId<Practitioner>;
-let controller: GuidedDemoController | undefined;
-let chartHook: ReturnType<typeof useGuidedDemo>;
 
-function Probe(): JSX.Element {
-  controller = useGuidedDemoController();
-  chartHook = useGuidedDemo();
-  const navigate = useNavigate();
-  const location = useLocation();
-  return (
-    <div>
-      <span data-testid="path">{location.pathname}</span>
-      <span data-testid="step">{controller?.currentStep}</span>
-      <button onClick={() => navigate(`/Patient/${controller?.scenario?.patientId}/DocumentReference`)}>docs</button>
-    </div>
-  );
+interface Probe {
+  controller: GuidedDemoController | undefined;
+  chartHook: ReturnType<typeof useGuidedDemo>;
+  pathname: string;
+  navigate: ReturnType<typeof useNavigate>;
 }
 
-function setup(): void {
-  render(
+/** Both demo hooks plus the router, as a chart component under the provider sees them. */
+function useProbe(): Probe {
+  return {
+    controller: useGuidedDemoController(),
+    chartHook: useGuidedDemo(),
+    pathname: useLocation().pathname,
+    navigate: useNavigate(),
+  };
+}
+
+function setup(): RenderHookResult<Probe, unknown> {
+  const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
     <MemoryRouter initialEntries={['/guided-demo']}>
       <MedplumProvider medplum={medplum}>
         <MantineProvider>
-          <GuidedDemoProvider>
-            <Routes>
-              <Route path="*" element={<Probe />} />
-            </Routes>
-          </GuidedDemoProvider>
+          <GuidedDemoProvider>{children}</GuidedDemoProvider>
         </MantineProvider>
       </MedplumProvider>
     </MemoryRouter>
   );
+  return renderHook(useProbe, { wrapper });
 }
 
 function check(noteVersion: string, choice: string, identified: string): Record<string, unknown> {
@@ -122,15 +120,15 @@ describe('readScenarioState', () => {
 
 describe('GuidedDemoProvider', () => {
   test('has no chart hook until a scenario starts', async () => {
-    setup();
+    const { result } = setup();
     await act(async () => undefined);
-    expect(controller?.scenario).toBeUndefined();
-    expect(chartHook).toBeUndefined();
+    expect(result.current.controller?.scenario).toBeUndefined();
+    expect(result.current.chartHook).toBeUndefined();
   });
 
   test('start seeds a patient, stores opaque ids only and opens the chart', async () => {
-    setup();
-    await act(async () => controller?.start());
+    const { result } = setup();
+    await act(async () => result.current.controller?.start());
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
     expect(Object.keys(stored).sort()).toEqual([
       'acknowledged',
@@ -140,33 +138,34 @@ describe('GuidedDemoProvider', () => {
     ]);
     expect(stored.tutorial).toBe('active');
     expect(JSON.stringify(stored)).not.toMatch(/Lisinopril|lisinopril|Demo/);
-    expect(screen.getByTestId('path')).toHaveTextContent(`/Patient/${stored.patientId}`);
-    expect(chartHook).toBeDefined();
-    await waitFor(() => expect(controller?.serverState).toBeDefined());
-    expect(controller?.currentStep).toBe(0);
+    expect(result.current.pathname).toBe(`/Patient/${stored.patientId}`);
+    expect(result.current.chartHook).toBeDefined();
+    await waitFor(() => expect(result.current.controller?.serverState).toBeDefined());
+    expect(result.current.controller?.currentStep).toBe(0);
   });
 
   test('reaching a step route acknowledges it', async () => {
-    setup();
-    await act(async () => controller?.start());
-    await userEvent.click(screen.getByText('docs'));
-    await waitFor(() => expect(controller?.scenario?.acknowledged).toContain('open-documents'));
+    const { result } = setup();
+    await act(async () => result.current.controller?.start());
+    const patientId = result.current.controller?.scenario?.patientId;
+    await act(async () => result.current.navigate(`/Patient/${patientId}/DocumentReference`));
+    await waitFor(() => expect(result.current.controller?.scenario?.acknowledged).toContain('open-documents'));
   });
 
   test('restores the scenario after a reload and ends without deleting anything', async () => {
-    setup();
-    await act(async () => controller?.start());
-    const ids = controller?.scenario;
-    act(() => controller?.setTutorial('dismissed'));
-    cleanup();
+    const first = setup();
+    await act(async () => first.result.current.controller?.start());
+    const ids = first.result.current.controller?.scenario;
+    act(() => first.result.current.controller?.setTutorial('dismissed'));
+    first.unmount();
 
     // A fresh provider reads the same scenario back.
-    setup();
-    await waitFor(() => expect(controller?.scenario?.encounterId).toBe(ids?.encounterId));
-    expect(controller?.scenario?.tutorial).toBe('dismissed');
+    const { result } = setup();
+    await waitFor(() => expect(result.current.controller?.scenario?.encounterId).toBe(ids?.encounterId));
+    expect(result.current.controller?.scenario?.tutorial).toBe('dismissed');
 
     const remove = vi.spyOn(medplum, 'deleteResource');
-    act(() => controller?.end());
+    act(() => result.current.controller?.end());
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(remove).not.toHaveBeenCalled();
     expect(await medplum.readResource('Patient', ids?.patientId ?? '')).toBeDefined();
@@ -174,8 +173,8 @@ describe('GuidedDemoProvider', () => {
 
   test('ignores unreadable stored state', async () => {
     localStorage.setItem(STORAGE_KEY, '{not json');
-    setup();
+    const { result } = setup();
     await act(async () => undefined);
-    expect(controller?.scenario).toBeUndefined();
+    expect(result.current.controller?.scenario).toBeUndefined();
   });
 });
