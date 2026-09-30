@@ -21,10 +21,12 @@ OUT.mkdir(parents=True, exist_ok=True)
 APP = 'http://localhost:3001'
 W, H = 1600, 900
 
-NOTE_1 = ('Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. '
-          'Plan: continue lisinopril 10 mg daily. Recheck BP in 4 weeks.')
-NOTE_2 = ('Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. '
-          'Lisinopril increased to 20 mg daily at discharge on 9/16; continue 20 mg, recheck BP in 4 weeks.')
+# The notes come from the scenario file, as the e2e tests read them, so the take always types the
+# text the app and the Bot were tested with (and never a hardcoded date).
+SCENARIO = json.loads((Path(__file__).resolve().parents[2] / 'provider/src/data/guided-scenario.json').read_text())
+NOTES = {v['id']: v['note'] for v in SCENARIO['variants']}
+NOTE_1 = NOTES['shortcut-from-chart']
+NOTE_2 = NOTES['resolved-after-edit']
 
 CURSOR = """
 (() => {
