@@ -14,9 +14,9 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { buildRequest, modalOrigin, noDoseSentence, splitSentences } from '../bots/consistency.ts';
+import type { ModelService } from '../bots/consistency.ts';
+import { buildRequest, doseResult, modelService, readSentence } from '../bots/consistency.ts';
 import scenario from '../src/data/guided-scenario.json' with { type: 'json' };
-import contract from '../src/data/model-contract.json' with { type: 'json' };
 import { REPO_ROOT } from './configure-provider.ts';
 import { readEnv } from './env-file.ts';
 
@@ -63,59 +63,13 @@ export function measurementCases(file = CASES_FILE): MeasurementCase[] {
   return [...authored, ...variants];
 }
 
-function sentenceFor(answer: any, text: string): string | null | undefined {
-  if (answer?.type !== 'choice') {
-    return undefined;
-  }
-  return answer.choice === 'none'
-    ? null
-    : (splitSentences(text)[Number(String(answer.choice).slice(1)) - 1] ?? undefined);
-}
-
 function highlightOk(expected: string | null, picked: string | null | undefined): boolean {
   return expected === null ? picked === null : !!picked?.includes(expected);
 }
 
-function validDose(answer: any): boolean {
-  const p = answer?.probabilities ?? {};
-  const values = Object.values(p) as number[];
-  return (
-    answer?.type === 'choice' &&
-    Object.keys(p).sort().join(',') === [...contract.labels].sort().join(',') &&
-    contract.labels.includes(answer.choice) &&
-    Math.abs(values.reduce((a, b) => a + b, 0) - 1) < 0.01 &&
-    p[answer.choice] === Math.max(...values)
-  );
-}
-
-/** `noDoseRule`: apply the Bot's no-dose rule, as the Bot does for this backend. */
-export type Endpoint = { name: string; url: string; headers: Record<string, string>; noDoseRule: boolean };
-
-export function typesafeEndpoint(apiKey: string): Endpoint {
-  return {
-    name: 'hosted Jev',
-    url: contract.endpoint,
-    headers: { Authorization: `Bearer ${apiKey}` },
-    noDoseRule: false,
-  };
-}
-
-export function modalEndpoint(url: string, key: string, secret: string): Endpoint {
-  const origin = modalOrigin(url);
-  if (!origin) {
-    throw new Error('Set CONSISTENCY_MODEL_URL to the HTTPS Modal Server origin');
-  }
-  return {
-    name: 'self-hosted model',
-    url: `${origin}/v1/systemone`,
-    headers: { 'Modal-Key': key, 'Modal-Secret': secret },
-    noDoseRule: true,
-  };
-}
-
 export interface MeasureOptions {
   rounds: number;
-  endpoint: Endpoint;
+  service: ModelService;
   outFile: string;
   cases?: MeasurementCase[];
   fetch?: typeof fetch;
@@ -124,7 +78,7 @@ export interface MeasureOptions {
 
 /** Runs the measurement; returns the number of successful answers. */
 export async function measure(options: MeasureOptions): Promise<number> {
-  const { rounds, endpoint, outFile } = options;
+  const { rounds, service, outFile } = options;
   const log = options.log ?? console.log;
   const doFetch = options.fetch ?? fetch;
   const cases = options.cases ?? measurementCases();
@@ -141,37 +95,34 @@ export async function measure(options: MeasureOptions): Promise<number> {
       };
       let failed = false;
       try {
-        const response = await doFetch(endpoint.url, {
+        const response = await doFetch(service.url, {
           method: 'POST',
           redirect: 'error',
-          headers: { 'Content-Type': 'application/json', ...endpoint.headers },
-          body: JSON.stringify(buildRequest([item.medication], item.outside, item.note)),
+          headers: { 'Content-Type': 'application/json', ...service.headers },
+          body: JSON.stringify(buildRequest([item.medication], item.outside, item.note, service.maxSentences)),
         });
         row.http_status = response.status;
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
         const data = (await response.json()) as any;
-        const dose = data?.answers?.dose_0;
-        if (typeof data?.model !== 'string' || !validDose(dose)) {
+        if (typeof data?.model !== 'string') {
           throw new Error('Unrecognized model response');
         }
-        const outside = sentenceFor(data.answers.sentence_outside_document_0, item.outside.text);
-        const note = sentenceFor(data.answers.sentence_visit_note_0, item.note.text);
-        const ruled =
-          endpoint.noDoseRule &&
-          dose.choice !== 'insufficient_information' &&
-          noDoseSentence(data.answers, 0, item.outside.text, item.note.text);
-        const choice = ruled ? 'insufficient_information' : dose.choice;
+        const answers = data.answers ?? {};
+        const result = doseResult(answers, 0, item.medication, item.outside.text, item.note.text);
+        const outside = readSentence(answers.sentence_outside_document_0, item.outside.text);
+        const note = readSentence(answers.sentence_visit_note_0, item.note.text);
+        const choice = result.choice;
+        const modelChoice = Object.entries(result.probabilities).reduce((a, b) => (b[1] > a[1] ? b : a))[0];
         row.result = {
           model: data.model,
           choice,
-          ...(ruled ? { model_choice: dose.choice, label_rule: 'no_dose_sentence' } : {}),
-          probabilities: dose.probabilities,
-          confidence: dose.confidence,
-          mentions_hospital_stay: data.answers.mentions_hospital_stay?.noul,
+          ...(result.label_rule ? { model_choice: modelChoice, label_rule: result.label_rule } : {}),
+          probabilities: result.probabilities,
+          confidence: result.confidence,
+          mentions_hospital_stay: answers.mentions_hospital_stay?.noul,
           usage: data.usage,
-          ...(data.revision ? { revision: data.revision, inference_ms: data.inference_ms } : {}),
           highlight: {
             outside: outside ?? null,
             note: note ?? null,
@@ -202,7 +153,7 @@ export async function measure(options: MeasureOptions): Promise<number> {
       }
     }
   }
-  log(`Recorded ${successful} live ${endpoint.name} answers in ${outFile}.`);
+  log(`Recorded ${successful} live answers in ${outFile}.`);
   return successful;
 }
 
@@ -215,25 +166,17 @@ async function main(): Promise<void> {
     throw new Error('Use 1 to 5 rounds per deliberate measurement run');
   }
   const env = readEnv(join(REPO_ROOT, '.env'));
-  const setting = (name: string): string => {
+  // The Bot's own service choice, with --backend in place of the CONSISTENCY_BACKEND secret.
+  const service = modelService((name) => {
+    if (name === 'CONSISTENCY_BACKEND') {
+      return values.backend;
+    }
     const value = (process.env[name] ?? env[name] ?? '').trim();
     if (!value) {
       throw new Error(`Set ${name} in the root .env`);
     }
     return value;
-  };
-  let endpoint: Endpoint;
-  if (values.backend === 'typesafe') {
-    endpoint = typesafeEndpoint(setting('TYPESAFE_API_KEY'));
-  } else if (values.backend === 'modal') {
-    endpoint = modalEndpoint(
-      setting('CONSISTENCY_MODEL_URL'),
-      setting('CONSISTENCY_MODAL_KEY'),
-      setting('CONSISTENCY_MODAL_SECRET')
-    );
-  } else {
-    throw new Error('--backend must be typesafe or modal');
-  }
+  });
   const dir = join(REPO_ROOT, 'artifacts');
   mkdirSync(dir, { recursive: true });
   const stamp = new Date()
@@ -241,7 +184,7 @@ async function main(): Promise<void> {
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z');
   console.log('  case                           choice                    p     reference  highlights (outside/note)');
-  await measure({ rounds, endpoint, outFile: join(dir, `${values.backend}-run-${stamp}.jsonl`) });
+  await measure({ rounds, service, outFile: join(dir, `${values.backend}-run-${stamp}.jsonl`) });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

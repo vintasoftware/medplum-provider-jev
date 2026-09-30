@@ -26,7 +26,7 @@ export type ReviewResult = {
   confidence: number;
   sentence_outside?: string;
   sentence_note?: string;
-  /** Set when a rule, not the model's top score, chose `choice`; `probabilities` stay the model's. */
+  /** Set when a rule, not the model's top score, chose `choice`; `probabilities` and `confidence` stay the model's. */
   label_rule?: 'no_dose_sentence';
 };
 
@@ -96,7 +96,8 @@ function fill(template: string, names: Record<string, string>): string {
 export function buildRequest(
   medications: string[],
   outside: SourceDocument,
-  note: SourceDocument
+  note: SourceDocument,
+  maxSentences: number
 ): { state: unknown; model: string; questions: Record<string, Question> } {
   const { dose, hospital, sentence } = contract.questions;
   const questions: Record<string, Question> = {
@@ -113,7 +114,8 @@ export function buildRequest(
       ['visit_note', note],
     ] as const) {
       const sentences = splitSentences(doc.text);
-      if (sentences.length < 1 || sentences.length > limits.max_sentences) continue;
+      // Past the service's limit the check keeps the label and drops that highlight.
+      if (sentences.length < 1 || sentences.length > maxSentences) continue;
       questions[`sentence_${field}_${i}`] = {
         type: 'choice',
         instructions: fill(sentence.instructions, { field, medication }),
@@ -213,13 +215,13 @@ async function readChart(
   };
 }
 
-type ModelService = {
+export type ModelService = {
   url: string;
   headers: Record<string, string>;
   timeoutMs: number;
   messages: Record<number, string>;
-  /** Apply noDoseSentence to the dose label (SELF-HOSTING.md, step 7). */
-  noDoseRule: boolean;
+  /** Most sentences a highlight question may list; `none` is one more option. */
+  maxSentences: number;
 };
 
 // Plain messages only: the response body can echo the request, which holds chart text.
@@ -235,7 +237,6 @@ const MODAL_MESSAGES: Record<number, string> = {
   0: 'The self-hosted model did not answer in time; it may be starting, retry in a few minutes',
   401: 'The self-hosted model rejected the project credentials',
   403: 'The self-hosted model rejected the project credentials',
-  413: 'The note is too long for the self-hosted check',
   422: 'The self-hosted model could not check this note; it may be too long',
   429: 'The self-hosted model is busy; retry shortly',
   503: 'The self-hosted model is starting or unavailable; retry in a few minutes',
@@ -261,23 +262,24 @@ export function modalOrigin(value: string): string | undefined {
   return valid ? url.origin : undefined;
 }
 
-function modelService(event: BotEvent): ModelService {
-  const apiKey = optionalSecret(event, 'TYPESAFE_API_KEY');
-  const backend = optionalSecret(event, 'CONSISTENCY_BACKEND') ?? (apiKey ? 'typesafe' : undefined);
+/** The backend `setting` names: the Bot reads project secrets, the measure script the root .env. */
+export function modelService(setting: (name: string) => string | undefined): ModelService {
+  const backend = setting('CONSISTENCY_BACKEND') ?? (setting('TYPESAFE_API_KEY') ? 'typesafe' : undefined);
   if (backend === 'typesafe') {
+    const apiKey = setting('TYPESAFE_API_KEY');
     if (!apiKey) throw new Unavailable('Missing string project secret: TYPESAFE_API_KEY');
     return {
       url: contract.endpoint,
       headers: { Authorization: `Bearer ${apiKey}` },
       timeoutMs: 30000,
       messages: TYPESAFE_MESSAGES,
-      noDoseRule: false,
+      maxSentences: limits.max_sentences,
     };
   }
   if (backend === 'modal') {
     const [url, key, secret] = ['CONSISTENCY_MODEL_URL', 'CONSISTENCY_MODAL_KEY', 'CONSISTENCY_MODAL_SECRET'].map(
       (name) => {
-        const value = optionalSecret(event, name);
+        const value = setting(name);
         if (!value) throw new Unavailable(`Missing string project secret: ${name}`);
         return value;
       }
@@ -289,7 +291,8 @@ function modelService(event: BotEvent): ModelService {
       headers: { 'Modal-Key': key, 'Modal-Secret': secret },
       timeoutMs: 8000,
       messages: MODAL_MESSAGES,
-      noDoseRule: true,
+      // Jebadiah's server refuses a choice with more than 20 criteria.
+      maxSentences: 19,
     };
   }
   throw new Unavailable('Project secret CONSISTENCY_BACKEND must be typesafe or modal');
@@ -341,70 +344,64 @@ function readChoice(
   return { choice: answer.choice, probabilities: scores };
 }
 
-function selectedSentence(answer: any, text: string): string | undefined {
-  // Highlighting is optional: an unusable answer drops the highlight, not the check.
+/**
+ * The sentence a highlight answer picked: `null` when it answered that no sentence states a dose,
+ * `undefined` when the answer is missing or unusable. Highlighting is optional: an unusable
+ * answer drops the highlight, not the check.
+ */
+export function readSentence(answer: any, text: string): string | null | undefined {
   if (!answer) return undefined;
   const sentences = splitSentences(text);
   try {
     const { choice } = readChoice(answer, [...sentences.map((_, n) => `s${n + 1}`), 'none']);
-    return choice === 'none' ? undefined : sentences[Number(choice.slice(1)) - 1];
+    return choice === 'none' ? null : sentences[Number(choice.slice(1)) - 1];
   } catch {
     return undefined;
   }
 }
 
 /**
- * Whether the highlight questions answered that no sentence of one document states a dose of
- * medication `i`. An unusable or missing answer counts as no evidence.
+ * Medication `i`'s result from the model's answers.
  *
- * Jebadiah, AutoJev and Decider each labeled a note with no dose `agreement` while their own
- * highlight question found no dose sentence. The dose criteria say a missing dose is insufficient
- * information, so for the self-hosted backend the Bot trusts the highlight answer over the label.
+ * The no-dose rule: Jebadiah, AutoJev and Decider each labeled a note with no dose `agreement`
+ * while their own highlight question found no dose sentence. The dose criteria say a missing
+ * dose is insufficient information, so the Bot trusts the highlight answer over an `agreement`
+ * label. It never downgrades `potential_conflict`. Hosted Jev labels that note correctly itself.
  */
-export function noDoseSentence(
+export function doseResult(
   answers: Record<string, any>,
   i: number,
+  medication: string,
   outsideText: string,
   noteText: string
-): boolean {
-  return [
-    [answers[`sentence_outside_document_${i}`], outsideText],
-    [answers[`sentence_visit_note_${i}`], noteText],
-  ].some(([answer, text]) => {
-    const sentences = splitSentences(text);
-    try {
-      return readChoice(answer, [...sentences.map((_, n) => `s${n + 1}`), 'none']).choice === 'none';
-    } catch {
-      return false;
-    }
-  });
+): ReviewResult {
+  const { choice, probabilities } = readChoice(answers[`dose_${i}`], labels);
+  const confidence = answers[`dose_${i}`].confidence;
+  if (!isProbability(confidence)) throw new Unavailable('The model returned an invalid answer');
+  const outside = readSentence(answers[`sentence_outside_document_${i}`], outsideText);
+  const note = readSentence(answers[`sentence_visit_note_${i}`], noteText);
+  const ruled = choice === 'agreement' && (outside === null || note === null);
+  return {
+    medication,
+    choice: ruled ? 'insufficient_information' : (choice as Label),
+    probabilities: probabilities as Record<Label, number>,
+    confidence,
+    sentence_outside: outside ?? undefined,
+    sentence_note: note ?? undefined,
+    ...(ruled ? { label_rule: 'no_dose_sentence' as const } : {}),
+  };
 }
 
 export async function review(medplum: MedplumClient, event: BotEvent, encounterId: string): Promise<ReviewOutput> {
-  const service = modelService(event);
+  const service = modelService((name) => optionalSecret(event, name));
   const chart = await readChart(medplum, encounterId);
-  const body = buildRequest(chart.medications, chart.outside, chart.note);
+  const body = buildRequest(chart.medications, chart.outside, chart.note, service.maxSentences);
   const response = await callModel(service, body);
   const answers = response?.answers ?? {};
 
-  const results = chart.medications.map((medication, i): ReviewResult => {
-    const { choice, probabilities } = readChoice(answers[`dose_${i}`], labels);
-    const confidence = answers[`dose_${i}`].confidence;
-    if (!isProbability(confidence)) throw new Unavailable('The model returned an invalid answer');
-    const ruled =
-      service.noDoseRule &&
-      choice !== 'insufficient_information' &&
-      noDoseSentence(answers, i, chart.outside.text, chart.note.text);
-    return {
-      medication,
-      choice: ruled ? 'insufficient_information' : (choice as Label),
-      probabilities: probabilities as Record<Label, number>,
-      confidence,
-      sentence_outside: selectedSentence(answers[`sentence_outside_document_${i}`], chart.outside.text),
-      sentence_note: selectedSentence(answers[`sentence_visit_note_${i}`], chart.note.text),
-      ...(ruled ? { label_rule: 'no_dose_sentence' as const } : {}),
-    };
-  });
+  const results = chart.medications.map((medication, i) =>
+    doseResult(answers, i, medication, chart.outside.text, chart.note.text)
+  );
   const hospital = answers.mentions_hospital_stay;
   if (hospital?.type !== 'noul' || !isProbability(hospital.noul)) {
     throw new Unavailable('The model returned an invalid answer');

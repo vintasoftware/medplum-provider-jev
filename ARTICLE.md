@@ -128,7 +128,7 @@ Hosted Jev runs the working demo. To explore running the model in our own accoun
 | Jebadiah 9B v2 | not listed | | | 6 of 9 | 17 of 18 |
 | Hosted Jev, for comparison | reference | 0.841 | | 8 of 9 | 18 of 18 |
 
-The self-hosted labels include one answer rule. Jebadiah 27B, AutoJev and Decider each labeled the note with no dose `agreement` while their own highlight question found no dose sentence, so for this backend the Bot reports that case as insufficient information. Hosted Jev gets it right without the rule.
+The self-hosted labels include one answer rule. Jebadiah 27B, AutoJev and Decider each labeled the note with no dose `agreement` while their own highlight question found no dose sentence, so the Bot reports that case as insufficient information. Hosted Jev gets it right without the rule, which changes none of its answers.
 
 We use Jebadiah 27B. It matched hosted Jev's count, and its calibration error is the lowest among the top entries, which matters because the card shows the probabilities. AutoJev-27B ranks higher on the index and on clinical-trial statements (NLI4CT), but on our cases it mislabeled both dated dose changes, one of them at 0.99. The index's top entry, Surogate Rune, is gated and has a calibration error of 0.12. Jebadiah's remaining miss is a dated change with no explanation, which it flagged as a conflict (0.94) where the reference expects insufficient information.
 

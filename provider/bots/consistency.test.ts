@@ -142,7 +142,8 @@ describe('consistency Bot', () => {
           author: 'Outside Hospital (synthetic)',
           text: scenario.discharge_summary,
         },
-        { title: "Today's visit note", date: '2026-09-23', author: "this clinic's provider", text: NOTE }
+        { title: "Today's visit note", date: '2026-09-23', author: "this clinic's provider", text: NOTE },
+        contract.limits.max_sentences
       )
     );
     expect(body.model).toBe('jev-latest');
@@ -272,22 +273,28 @@ describe('consistency Bot', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  function noDoseResponse(noteAnswer: unknown): unknown {
+  function noDoseResponse(
+    noteAnswer: unknown,
+    dose: Record<string, number> = { agreement: 0.78, potential_conflict: 0.02, insufficient_information: 0.2 }
+  ): unknown {
     const response = modelResponse() as { answers: Record<string, unknown> };
     const note = splitSentences(NOTE);
     return {
       ...response,
       answers: {
         ...response.answers,
-        dose_0: choice({ agreement: 0.78, potential_conflict: 0.02, insufficient_information: 0.2 }),
+        dose_0: choice(dose),
         sentence_visit_note_0: noteAnswer ?? sentenceChoice(note.length, 'none'),
       },
     };
   }
 
-  test('on Modal, a document with no dose sentence makes the label insufficient information', async () => {
+  test.each([
+    ['hosted Jev', { TYPESAFE_API_KEY: 'ts-test' }],
+    ['Modal', MODAL],
+  ])('on %s, a document with no dose sentence makes an agreement insufficient information', async (_name, values) => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse(undefined))));
-    const result = await handler(medplum, event(review(), MODAL));
+    const result = await handler(medplum, event(review(), values));
     if (result.status !== 'ok') throw new Error('expected ok');
     expect(result.results[0]).toMatchObject({
       choice: 'insufficient_information',
@@ -297,15 +304,34 @@ describe('consistency Bot', () => {
     expect(result.results[0].sentence_note).toBeUndefined();
   });
 
-  test.each([
-    ['hosted Jev', { TYPESAFE_API_KEY: 'ts-test' }, undefined],
-    ['an unusable highlight answer', MODAL, { type: 'noul', noul: 0.5 }],
-  ])('keeps the model label for %s', async (_name, values, noteAnswer) => {
-    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse(noteAnswer))));
-    const result = await handler(medplum, event(review(), values));
+  test('keeps the model label for an unusable highlight answer', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse({ type: 'noul', noul: 0.5 }))));
+    const result = await handler(medplum, event(review(), MODAL));
     if (result.status !== 'ok') throw new Error('expected ok');
     expect(result.results[0].choice).toBe('agreement');
     expect(result.results[0].label_rule).toBeUndefined();
+  });
+
+  test('on Modal, never downgrades a potential conflict', async () => {
+    const conflict = { agreement: 0.1, potential_conflict: 0.8, insufficient_information: 0.1 };
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(noDoseResponse(undefined, conflict))));
+    const result = await handler(medplum, event(review(), MODAL));
+    if (result.status !== 'ok') throw new Error('expected ok');
+    expect(result.results[0].choice).toBe('potential_conflict');
+    expect(result.results[0].label_rule).toBeUndefined();
+  });
+
+  test('on Modal, drops the highlight of a document longer than the server takes, not the check', async () => {
+    // Jebadiah's server refuses a choice with more than 20 criteria: 20 sentences plus `none`.
+    const long = Array.from({ length: 20 }, (_, n) => `Line ${n + 1} of the plan.`).join(' ');
+    await discharge('2026-09-17T12:00:00Z', `${long} Lisinopril 20 mg daily.`);
+    await handler(medplum, event(review(), MODAL));
+    const modal = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(modal.questions.sentence_outside_document_0).toBeUndefined();
+    expect(modal.questions.sentence_visit_note_0).toBeDefined();
+    await handler(medplum, event(review()));
+    const hosted = JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string);
+    expect(Object.keys(hosted.questions.sentence_outside_document_0.criteria)).toHaveLength(22);
   });
 
   test('on Modal, keeps the label when both documents have a dose sentence', async () => {

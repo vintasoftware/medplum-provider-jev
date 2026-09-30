@@ -45,9 +45,9 @@ modal deploy -m demo.modal_app
 python -c 'import modal; print(modal.Server.from_name("healthcare-consistency", "Inference").get_url())'
 ```
 
-Deploy without `HUGGING_FACE_TOKEN` set, so the app carries no token. The private `Inference` Server runs in the US with US-east routing, scales to zero after five idle minutes and keeps its URL. Memory snapshots are off, weights are mounted read-only and Hub access is disabled. It refuses to start unless the staged revision was verified. Use the printed URL, not a `modal.com/apps/...` dashboard link; regional URLs can end in `.modal.direct`.
+Deploy without `HUGGING_FACE_TOKEN` set, so the app carries no token. The private `Inference` Server runs in the US with US-east routing, scales to zero after five idle minutes and keeps its URL. Memory snapshots are off, weights are mounted read-only and Hub access is disabled. It refuses to start unless the staged revision was verified, and stops at once if the model fails to load. Use the printed URL, not a `modal.com/apps/...` dashboard link; regional URLs can end in `.modal.direct`.
 
-The server answers for `jev-latest`, reads each question's option logits in one pass and applies the checkpoint's per-question-type temperatures. It runs one request at a time and queues the rest.
+The server answers for `jev-latest` and reports its weights path, which names the pinned revision, as the model (the card shows `model /models/3dd6f22…`). It reads each question's option logits in one pass and applies the checkpoint's per-question-type temperatures. It runs one request at a time and queues the rest. It refuses a question with more than 20 options, so on `modal` the Bot skips the highlight for a document over 19 sentences and still checks the label.
 
 ## 3. Authenticate callers
 
@@ -84,7 +84,7 @@ In Medplum Project Admin → Secrets, add the three secrets from step 3 and set 
 
 Measured from zero containers on September 30, 2026: GPU scheduling and weight loading take 1–1.5 minutes, then a warm-up of about 2 minutes. `/health` answered 200 after **186 s and 223 s** in two runs.
 
-- The model's linear-attention kernels compile on first use for each input shape, which made the first requests take 10–37 s. Start-up therefore sends synthetic requests across the Bot's shapes before the Server takes traffic; the Inference logs show `warm-up: … s` when it ends. The first real request then takes about 2 s.
+- The model's linear-attention kernels compile on first use for each input shape, which made the first requests take 10–37 s. Start-up therefore sends synthetic requests of 1 and 8 questions at five prompt lengths before the Server takes traffic; the Inference logs show `warm-up: … s` when it ends. The first real request then takes about 2 s.
 - While no container is ready, Modal's proxy answers **503 at once** (empty body); it does not queue the request. One request schedules a container, but requests 20 s apart once saw none for over 80 s, while retrying every 2 s scheduled one at once.
 - The Bot is a Lambda with Medplum's default 10-second `timeout` and gives the model 8 s, so it cannot wait out a cold start. After an idle period, the first **Check note** shows "The self-hosted model is starting or unavailable"; that request starts the GPU, so check again in about four minutes.
 
@@ -98,7 +98,7 @@ until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Modal-Key: $CONSISTENCY_MO
 
 ## 7. Answer rules
 
-For `modal` only, the Bot reports `insufficient_information` when the model's own highlight question found no dose sentence in one document, whatever the dose label (`noDoseSentence` in `provider/bots/consistency.ts`). Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. Hosted Jev gets that case right, so the rule is off for it.
+When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: hosted Jev gets that case right itself, and on September 30, 2026 the rule changed none of its nine answers (`artifacts/typesafe-run-20260930T134049Z.jsonl`).
 
 The remaining miss is `dose-dates-unexplained`: two dated doses with no explanation, which the reference calls insufficient information and Jebadiah flags as `potential_conflict` (0.94).
 
