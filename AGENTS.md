@@ -31,4 +31,5 @@ All data here is synthetic. Keep document text, secrets and model response bodie
 ## Local tooling
 
 - A command-guard hook blocks `rm -rf`, `git checkout -- <path>` and some literal strings. Use targeted `rm` of named files, and restore files with `git show HEAD:<path>`.
+- Orca runs `orca.yaml` in each new worktree: it links `.env`, `provider/.env.local` and `provider/medplum.config.json` from the main checkout and installs dependencies. A worktree made with plain `git worktree add` gets neither.
 - Docs stay short and in plain English, without restating what the code makes obvious.
