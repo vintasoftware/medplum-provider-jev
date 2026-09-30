@@ -9,7 +9,7 @@ import { Loading, useMedplum } from '@medplum/react';
 import { IconStethoscope } from '@tabler/icons-react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SAVE_TIMEOUT_MS } from '../../config/constants';
+import { COMPLETE_LIST_COUNT, SAVE_TIMEOUT_MS } from '../../config/constants';
 import { useEncounterChart } from '../../hooks/useEncounterChart';
 import { useGuidedDemo } from '../../pages/guided-demo/GuidedDemoContext';
 import { TOUR } from '../../pages/guided-demo/tour/anchors';
@@ -73,7 +73,10 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
     }
 
     const fetchProvenance = async (): Promise<void> => {
-      const provenance = await medplum.searchResources('Provenance', `target=${getReferenceString(encounter)}`);
+      const provenance = await medplum.searchResources('Provenance', {
+        target: getReferenceString(encounter),
+        _count: COMPLETE_LIST_COUNT,
+      });
       setProvenances(provenance);
       if (provenance.length > 0 && clinicalImpression?.status === 'completed') {
         setChartNoteStatus(ChartNoteStatus.SignedAndLocked);
@@ -155,19 +158,28 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
             demo?.refresh();
           }
         } catch (err) {
-          showErrorNotification(err);
+          // Keep the latest text pending so the next flush saves it again.
+          notePendingRef.current = true;
+          throw err;
         }
       };
-      // Chain saves so they reach the server in typing order.
-      noteSaveRef.current = noteSaveRef.current.then(save);
-      return noteSaveRef.current;
+      // Chain saves so they reach the server in typing order. A failed save rejects its own
+      // promise but does not block the saves queued after it.
+      const queued = noteSaveRef.current.catch(() => undefined).then(save);
+      noteSaveRef.current = queued;
+      return queued;
     },
     [clinicalImpression, medplum, demo]
   );
 
-  const debouncedPatchChartNote = useDebouncedCallback(saveChartNote, SAVE_TIMEOUT_MS);
+  const debouncedPatchChartNote = useDebouncedCallback((note: string): void => {
+    saveChartNote(note).catch(showErrorNotification);
+  }, SAVE_TIMEOUT_MS);
 
-  /** Saves pending note text now instead of after the debounce, and waits for any save in flight. */
+  /**
+   * Saves pending note text now instead of after the debounce, and waits for any save in flight.
+   * Rejects when the text could not be saved, so a check or signature never uses an older note.
+   */
   const flushChartNote = useCallback(async (): Promise<void> => {
     if (notePendingRef.current) {
       debouncedPatchChartNote.cancel();
@@ -190,6 +202,13 @@ export const EncounterChart = (props: EncounterChartProps): JSX.Element => {
 
   const handleSign = async (practitioner: Reference<Practitioner>, lock: boolean, reason?: string): Promise<void> => {
     if (!encounter) {
+      return;
+    }
+
+    try {
+      await flushChartNote();
+    } catch (err) {
+      showErrorNotification(err);
       return;
     }
 

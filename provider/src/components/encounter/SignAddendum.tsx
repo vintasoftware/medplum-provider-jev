@@ -7,6 +7,7 @@ import { useMedplum, useMedplumProfile } from '@medplum/react';
 import { IconLock, IconPencil, IconSignature } from '@tabler/icons-react';
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
+import { COMPLETE_LIST_COUNT } from '../../config/constants';
 import { ChartNoteStatus } from '../../types/encounter';
 import { showErrorNotification } from '../../utils/notifications';
 
@@ -56,6 +57,7 @@ export const SignAddendum = ({ provenances, chartNoteStatus, encounter }: SignAd
           encounter: `Encounter/${encounter.id}`,
           type: '55107-7', // LOINC code for Addendum Document
           _sort: '-date',
+          _count: COMPLETE_LIST_COUNT,
         });
 
         const displays: AddendumDisplay[] = bundle.map((doc) => {

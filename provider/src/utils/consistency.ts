@@ -5,15 +5,16 @@ import type {
   DetectedIssue,
   DocumentReference,
   Encounter,
+  ExtractResource,
   Patient,
   Practitioner,
   Reference,
 } from '@medplum/fhirtypes';
 import type { ReviewOutput, ReviewResult } from '../../bots/consistency';
-import { splitSentences } from '../../bots/consistency';
+import { noteSearch, splitSentences } from '../../bots/consistency';
 import contract from '../data/model-contract.json';
 
-export { splitSentences };
+export { noteSearch, splitSentences };
 export type { ReviewOutput };
 export type ReviewLabel = ReviewResult['choice'];
 export type ReviewSuccess = Extract<ReviewOutput, { status: 'ok' }>;
@@ -107,7 +108,8 @@ export function buildDetectedIssue(
       sentence_note_index: sentenceIndex(note.text, sentence_note),
     })),
   };
-  const noteReference = review.note_version ? `${note.source}/_history/${review.note_version}` : note.source;
+  const noteReference = `${note.source}/_history/${review.note_version}`;
+  const outsideReference = `${outside.source}/_history/${review.outside_version}`;
   return {
     resourceType: 'DetectedIssue',
     status: 'preliminary',
@@ -118,7 +120,7 @@ export function buildDetectedIssue(
     patient,
     identifiedDateTime: review.checked_at,
     author,
-    implicated: [createReference(encounter), { reference: noteReference }, { reference: outside.source }],
+    implicated: [createReference(encounter), { reference: noteReference }, { reference: outsideReference }],
     detail: review.results
       .map(
         (r) =>
@@ -132,7 +134,7 @@ export function buildDetectedIssue(
     evidence: [
       {
         detail: [
-          { reference: outside.source, display: outside.title },
+          { reference: outsideReference, display: outside.title },
           { reference: noteReference, display: note.title },
         ],
       },
@@ -150,17 +152,37 @@ export function readStoredCheck(issue: DetectedIssue): StoredCheck | undefined {
   }
 }
 
-/** The implicated note reference, e.g. `ClinicalImpression/1/_history/3`. */
-export function implicatedNote(issue: DetectedIssue): { id: string; versionId?: string } | undefined {
-  const match = issue.implicated
-    ?.map((r) => r.reference ?? '')
-    .map((ref) => /^ClinicalImpression\/([^/]+)(?:\/_history\/([^/]+))?$/.exec(ref))
-    .find(Boolean);
+/** A versioned reference implicated by a check, e.g. `ClinicalImpression/1/_history/3`. */
+export interface ImplicatedSource {
+  id: string;
+  versionId: string;
+}
+
+function implicatedSource(issue: DetectedIssue, resourceType: string): ImplicatedSource | undefined {
+  const pattern = new RegExp(`^${resourceType}/([^/]+)/_history/([^/]+)$`);
+  const match = issue.implicated?.map((r) => pattern.exec(r.reference ?? '')).find(Boolean);
   return match ? { id: match[1], versionId: match[2] } : undefined;
 }
 
-export function implicatedDocument(issue: DetectedIssue): string | undefined {
-  return issue.implicated?.map((r) => r.reference).find((ref) => ref?.startsWith('DocumentReference/'));
+export function implicatedNote(issue: DetectedIssue): ImplicatedSource | undefined {
+  return implicatedSource(issue, 'ClinicalImpression');
+}
+
+export function implicatedDocument(issue: DetectedIssue): ImplicatedSource | undefined {
+  return implicatedSource(issue, 'DocumentReference');
+}
+
+/** The version of a source that a check read, or undefined when it cannot be loaded. */
+export async function readCheckedVersion<K extends 'ClinicalImpression' | 'DocumentReference'>(
+  medplum: MedplumClient,
+  resourceType: K,
+  source: ImplicatedSource
+): Promise<ExtractResource<K> | undefined> {
+  try {
+    return await medplum.readVersion(resourceType, source.id, source.versionId);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function findLatestCheck(
@@ -175,12 +197,16 @@ export async function findLatestCheck(
   );
 }
 
-export function decodeAttachment(doc: DocumentReference): string | undefined {
-  const data = doc.content?.[0]?.attachment?.data;
-  if (!data) {
-    return undefined;
+/** The text of a document's first attachment, inline (`data`) or by URL (e.g. a Binary). */
+export async function attachmentText(medplum: MedplumClient, doc: DocumentReference): Promise<string | undefined> {
+  const attachment = doc.content?.[0]?.attachment;
+  if (attachment?.data) {
+    return new TextDecoder().decode(Uint8Array.from(atob(attachment.data), (c) => c.charCodeAt(0)));
   }
-  return new TextDecoder().decode(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)));
+  if (attachment?.url) {
+    return (await medplum.download(attachment.url)).text();
+  }
+  return undefined;
 }
 
 export function noteText(impression: ClinicalImpression | undefined): string {

@@ -9,6 +9,7 @@ import {
   CHECK_CODE_SYSTEM,
   headlineResult,
   implicatedNote,
+  noteSearch,
   readStoredCheck,
 } from '../../utils/consistency';
 import { seedScenario } from './seedScenario';
@@ -90,9 +91,13 @@ function writeStored(value: StoredScenario | undefined): void {
 
 export async function readScenarioState(medplum: MedplumClient, encounterId: string): Promise<ScenarioState> {
   const encounterRef = `Encounter/${encounterId}`;
-  const [encounter, impression, issues, provenances] = await Promise.all([
-    medplum.readResource('Encounter', encounterId, { cache: 'no-cache' }),
-    medplum.searchOne('ClinicalImpression', { encounter: encounterRef, _sort: '-_lastUpdated' }, { cache: 'no-cache' }),
+  const encounter = await medplum.readResource('Encounter', encounterId, { cache: 'no-cache' });
+  const [impression, issues, provenances] = await Promise.all([
+    encounter.subject?.reference
+      ? medplum.searchOne('ClinicalImpression', noteSearch(encounterRef, encounter.subject.reference), {
+          cache: 'no-cache',
+        })
+      : undefined,
     medplum.searchResources(
       'DetectedIssue',
       { implicated: encounterRef, code: `${CHECK_CODE_SYSTEM}|${CHECK_CODE}`, _sort: '-identified', _count: '20' },
@@ -106,12 +111,13 @@ export async function readScenarioState(medplum: MedplumClient, encounterId: str
     noteVersion: impression?.meta?.versionId,
     checks: (issues as WithId<DetectedIssue>[]).flatMap((issue) => {
       const headline = headlineResult(readStoredCheck(issue)?.results ?? []);
-      return headline
+      const note = implicatedNote(issue);
+      return headline && note
         ? [
             {
               id: issue.id,
               choice: headline.choice,
-              noteVersion: implicatedNote(issue)?.versionId,
+              noteVersion: note.versionId,
               mitigated: (issue.mitigation?.length ?? 0) > 0,
             },
           ]

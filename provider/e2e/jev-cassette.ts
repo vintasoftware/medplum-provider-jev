@@ -38,8 +38,9 @@ export interface Cassette {
 
 interface ChartIds {
   documentReferenceId: string;
+  documentVersion: string;
   clinicalImpressionId: string;
-  noteVersion: string | undefined;
+  noteVersion: string;
   noteText: string;
 }
 
@@ -57,14 +58,18 @@ async function chartIds(medplum: APIRequestContext, encounterId: string): Promis
   };
   const encounter = await get(`Encounter/${encounterId}`);
   const [impressions, summaries] = await Promise.all([
-    get(`ClinicalImpression?encounter=Encounter/${encounterId}&_sort=-_lastUpdated&_count=1`),
+    get(
+      `ClinicalImpression?encounter=Encounter/${encounterId}&subject=${encounter.subject.reference}&_sort=-_lastUpdated&_count=1`
+    ),
     get(
       `DocumentReference?subject=${encounter.subject.reference}&type=http://loinc.org|18842-5&status=current&_sort=-date&_count=1`
     ),
   ]);
   const impression = impressions.entry?.[0]?.resource;
+  const summary = summaries.entry?.[0]?.resource;
   return {
-    documentReferenceId: summaries.entry?.[0]?.resource?.id,
+    documentReferenceId: summary?.id,
+    documentVersion: summary?.meta?.versionId,
     clinicalImpressionId: impression?.id,
     noteVersion: impression?.meta?.versionId,
     noteText: impression?.note?.[0]?.text?.trim() ?? '',
@@ -76,6 +81,7 @@ function normalize(response: Ok): Ok {
     ...response,
     checked_at: '{{now}}',
     note_version: '{{noteVersion}}',
+    outside_version: '{{documentVersion}}',
     documents: [
       { ...response.documents[0], source: 'DocumentReference/{{documentReferenceId}}' },
       { ...response.documents[1], source: 'ClinicalImpression/{{clinicalImpressionId}}' },
@@ -89,7 +95,8 @@ function fill(response: Ok, ids: ChartIds): Ok {
       .replaceAll('{{now}}', new Date().toISOString())
       .replaceAll('{{documentReferenceId}}', ids.documentReferenceId)
       .replaceAll('{{clinicalImpressionId}}', ids.clinicalImpressionId)
-      .replaceAll('"{{noteVersion}}"', ids.noteVersion ? JSON.stringify(ids.noteVersion) : 'null')
+      .replaceAll('{{noteVersion}}', ids.noteVersion)
+      .replaceAll('{{documentVersion}}', ids.documentVersion)
   );
 }
 

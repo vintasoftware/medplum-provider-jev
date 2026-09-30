@@ -21,6 +21,14 @@ const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const { limits, labels } = contract;
 
+/**
+ * The search that picks a visit's note: the most recently updated ClinicalImpression for the
+ * encounter and its patient. The editor, the Bot and the tutorial use it so they read the same note.
+ */
+export function noteSearch(encounter: string, subject: string): Record<string, string> {
+  return { encounter, subject, _sort: '-_lastUpdated', _count: '1' };
+}
+
 type Label = (typeof contract.labels)[number];
 type SourceDocument = { title: string; date: string; author: string; text: string };
 type Question = { type: 'choice' | 'noul'; instructions: string; criteria?: Record<string, string> };
@@ -45,7 +53,8 @@ export type ReviewOutput =
       results: ReviewResult[];
       mentions_hospital_stay: number;
       documents: { title: string; date: string; text: string; source: string }[];
-      note_version: string | undefined;
+      note_version: string;
+      outside_version: string;
     }
   | { status: 'unavailable'; reason: string };
 
@@ -288,7 +297,8 @@ async function readChart(
   outside: SourceDocument;
   note: SourceDocument;
   sources: string[];
-  noteVersion?: string;
+  noteVersion: string;
+  outsideVersion: string;
 }> {
   let encounter: Encounter;
   try {
@@ -300,11 +310,10 @@ async function readChart(
   if (!subject?.startsWith('Patient/')) throw new Unavailable('This visit is not accessible');
 
   const [impression, requests, summaries] = await Promise.all([
-    medplum.searchOne(
-      'ClinicalImpression',
-      { encounter: `Encounter/${encounterId}`, _sort: '-_lastUpdated' },
-      { signal, maxRetries: 0 }
-    ),
+    medplum.searchOne('ClinicalImpression', noteSearch(`Encounter/${encounterId}`, subject), {
+      signal,
+      maxRetries: 0,
+    }),
     medplum.searchResources(
       'MedicationRequest',
       { subject, status: 'active', _count: '100' },
@@ -354,7 +363,9 @@ async function readChart(
     outside,
     note,
     sources: [`DocumentReference/${summary.id}`, `ClinicalImpression/${impression.id}`],
-    noteVersion: impression.meta?.versionId,
+    // The server versions every resource it returns.
+    noteVersion: impression.meta?.versionId as string,
+    outsideVersion: summary.meta?.versionId as string,
   };
 }
 
@@ -572,6 +583,7 @@ export async function review(medplum: MedplumClient, event: BotEvent, encounterI
       { title: chart.note.title, date: chart.note.date, text: chart.note.text, source: chart.sources[1] },
     ],
     note_version: chart.noteVersion,
+    outside_version: chart.outsideVersion,
   };
 }
 

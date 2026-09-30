@@ -30,6 +30,7 @@ import type {
   Slot,
   Task,
 } from '@medplum/fhirtypes';
+import { COMPLETE_LIST_COUNT } from '../config/constants';
 
 const FHIR_ACT_REASON_SYSTEM = 'http://terminology.hl7.org/CodeSystem/v3-ActReason';
 const FHIR_PROVENANCE_PARTICIPANT_TYPE_SYSTEM =
@@ -250,6 +251,7 @@ async function handleChargeItemsFromTasks(
 ): Promise<void> {
   const tasks = await medplum.search('Task', {
     encounter: getReferenceString(encounter),
+    _count: COMPLETE_LIST_COUNT,
   });
 
   if (!tasks.entry?.length) {
