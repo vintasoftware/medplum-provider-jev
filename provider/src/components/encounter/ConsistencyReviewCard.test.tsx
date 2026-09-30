@@ -37,6 +37,7 @@ function botResult(overrides: Partial<Extract<ReviewOutput, { status: 'ok' }>> =
     input_tokens: 900,
     mentions_hospital_stay: 0.1,
     note_version: impression.meta?.versionId,
+    outside_version: summary.meta?.versionId,
     results: [
       {
         medication: 'lisinopril',
@@ -163,7 +164,7 @@ describe('ConsistencyReviewCard', () => {
     expect(issues[0].implicated?.map((r) => r.reference)).toEqual([
       `Encounter/${encounter.id}`,
       `ClinicalImpression/${impression.id}/_history/${impression.meta?.versionId}`,
-      `DocumentReference/${summary.id}`,
+      `DocumentReference/${summary.id}/_history/${summary.meta?.versionId}`,
     ]);
     // The stored result holds no chart text.
     expect(JSON.stringify(issues[0])).not.toContain('lisinopril 10 mg daily');
@@ -205,6 +206,69 @@ describe('ConsistencyReviewCard', () => {
     setup();
     await waitFor(() => expect(screen.getAllByText('Potential conflict', BADGE)).toHaveLength(2));
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  test('reloads a Binary-URL discharge summary at the version that was checked', async () => {
+    const texts: Record<string, string> = {
+      'Binary/original': scenario.discharge_summary,
+      'Binary/revised': 'A revised summary that was never checked.',
+    };
+    const download = vi
+      .spyOn(medplum, 'download')
+      .mockImplementation(async (url) => new Blob([texts[url as string] ?? '']));
+    summary = await medplum.updateResource<DocumentReference>({
+      ...summary,
+      content: [{ attachment: { contentType: 'text/plain', url: 'Binary/original' } }],
+    });
+    vi.spyOn(medplum, 'executeBot').mockResolvedValue(botResult());
+    const { rerender } = setup();
+    rerender({ requestSeq: 1 });
+    await screen.findByText('Potential conflict', BADGE);
+    const outsideSentence = splitSentences(scenario.discharge_summary)[2];
+    expect((await screen.findByText(outsideSentence)).tagName).toBe('MARK');
+
+    // The document changes after the check; a reload still shows what was checked.
+    await medplum.updateResource<DocumentReference>({
+      ...summary,
+      content: [{ attachment: { contentType: 'text/plain', url: 'Binary/revised' } }],
+    });
+    const readVersion = vi.spyOn(medplum, 'readVersion');
+    download.mockClear();
+    setup();
+    await waitFor(() => expect(screen.getAllByText(outsideSentence)).toHaveLength(2));
+    expect(readVersion).toHaveBeenCalledWith('DocumentReference', summary.id, summary.meta?.versionId);
+    expect(download).toHaveBeenCalledWith('Binary/original');
+    expect(download).not.toHaveBeenCalledWith('Binary/revised');
+    expect(screen.queryByText(/revised summary/)).not.toBeInTheDocument();
+  });
+
+  test('reloads a check stored before versioned summaries while the summary is unchanged', async () => {
+    vi.spyOn(medplum, 'executeBot').mockResolvedValue(
+      botResult({ outside_version: undefined, checked_at: new Date(Date.now() + 1000).toISOString() })
+    );
+    const { rerender } = setup();
+    rerender({ requestSeq: 1 });
+    await screen.findByText('Potential conflict', BADGE);
+    const [issue] = await medplum.searchResources('DetectedIssue', { patient: `Patient/${patient.id}` });
+    expect(issue.implicated?.map((r) => r.reference)).toContain(`DocumentReference/${summary.id}`);
+    expect((await screen.findByText(splitSentences(scenario.discharge_summary)[2])).tagName).toBe('MARK');
+  });
+
+  test('does not show a changed summary as the evidence of a check stored before versioned summaries', async () => {
+    vi.spyOn(medplum, 'executeBot').mockResolvedValue(
+      botResult({ outside_version: undefined, checked_at: new Date(Date.now() - 1000).toISOString() })
+    );
+    await medplum.updateResource<DocumentReference>({
+      ...summary,
+      content: [{ attachment: { contentType: 'text/plain', data: btoa('A revised summary that was never checked.') } }],
+    });
+    const { rerender } = setup();
+    rerender({ requestSeq: 1 });
+    await screen.findByText('Potential conflict', BADGE);
+    expect(await screen.findByText('The version that was checked could not be loaded.')).toBeInTheDocument();
+    expect(screen.queryByText(/revised summary/)).not.toBeInTheDocument();
+    // The note is versioned, so it still loads.
+    expect(screen.getByText('Plan: continue lisinopril 10 mg daily.').tagName).toBe('MARK');
   });
 
   test('marks the check stale when the note changed after it', async () => {

@@ -7,7 +7,7 @@ import { createReference } from '@medplum/core';
 import type { Encounter, Patient, Practitioner, Task } from '@medplum/fhirtypes';
 import { MockClient } from '@medplum/mock';
 import { MedplumProvider } from '@medplum/react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -106,6 +106,66 @@ describe('EncountersPage', () => {
     setup();
 
     expect(await screen.findByText('Note & Tasks')).toBeInTheDocument();
+  });
+
+  test('Opens an encounter of this patient that is not on the current list page', async () => {
+    const older = await createVisit(patient, { type: [{ text: 'Older Visit' }] });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await createVisit(patient);
+    renderAt(`/Patient/${patient.id}/Encounter/${older.id}?_count=1&_sort=-_lastUpdated`);
+
+    expect(await screen.findByText('Note & Tasks')).toBeInTheDocument();
+    // The list row shows only the newest visit; the chart header shows the selected one.
+    expect(await screen.findByText('Office Visit')).toBeInTheDocument();
+    expect(await screen.findByText('Older Visit')).toBeInTheDocument();
+  });
+
+  test("Does not open another patient's encounter by id", async () => {
+    const other: WithId<Patient> = await medplum.createResource({
+      resourceType: 'Patient',
+      name: [{ given: ['John'], family: 'Smith' }],
+    });
+    await createVisit(patient);
+    const foreign = await createVisit(other, { type: [{ text: 'Telehealth Visit' }] });
+    const read = vi.spyOn(medplum, 'readResource');
+    setup(foreign.id);
+
+    expect(await screen.findByText('Select a visit to view its chart.')).toBeInTheDocument();
+    expect(read).toHaveBeenCalledWith('Encounter', foreign.id);
+    expect(screen.queryByText('Note & Tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Telehealth Visit')).not.toBeInTheDocument();
+  });
+
+  test.each([
+    [
+      'another encounter',
+      (encounter: WithId<Encounter>, other: WithId<Encounter>) => ({ encounter: createReference(other) }),
+    ],
+    [
+      'another patient',
+      (encounter: WithId<Encounter>) => ({
+        encounter: createReference(encounter),
+        for: { reference: 'Patient/someone-else' },
+      }),
+    ],
+  ])('Does not open a task of %s from the task route', async (_name, link) => {
+    const encounter = await createVisit(patient);
+    const other = await createVisit(patient, { type: [{ text: 'Other Visit' }] });
+    const task = await medplum.createResource<Task>({
+      resourceType: 'Task',
+      status: 'in-progress',
+      intent: 'order',
+      code: { text: 'Review Labs' },
+      for: createReference(patient),
+      ...link(encounter, other),
+    });
+    const readReference = vi.spyOn(medplum, 'readReference');
+    renderAt(`/Patient/${patient.id}/Encounter/${encounter.id}/Task/${task.id}${QUERY}`);
+
+    expect(await screen.findByText('Note & Tasks')).toBeInTheDocument();
+    await waitFor(() => expect(readReference).toHaveBeenCalledWith({ reference: `Task/${task.id}` }));
+    await act(async () => undefined);
+    expect(screen.queryByRole('heading', { name: 'Review Labs' })).not.toBeInTheDocument();
   });
 
   test('Shows the empty state when the patient has no encounters', async () => {

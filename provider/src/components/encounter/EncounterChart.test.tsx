@@ -10,7 +10,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION } from '../../utils/consistency';
+import { CHECK_CODE, CHECK_CODE_SYSTEM, CHECK_RESULT_EXTENSION, noteSearch } from '../../utils/consistency';
 import { EncounterChart } from './EncounterChart';
 
 const mockPractitioner: WithId<Practitioner> = {
@@ -218,10 +218,10 @@ describe('EncounterChart', () => {
     setup();
 
     await waitFor(() => {
-      expect(medplum.searchResources).toHaveBeenCalledWith(
-        'Provenance',
-        expect.stringContaining('target=Encounter/encounter-123')
-      );
+      expect(medplum.searchResources).toHaveBeenCalledWith('Provenance', {
+        target: 'Encounter/encounter-123',
+        _count: '1000',
+      });
     });
   });
 
@@ -279,7 +279,7 @@ describe('EncounterChart', () => {
     });
   });
 
-  test('fetches tasks for encounter', async () => {
+  test('fetches every task for the encounter in one explicit page', async () => {
     await medplum.createResource(mockTask);
 
     vi.spyOn(medplum, 'searchResources');
@@ -289,13 +289,13 @@ describe('EncounterChart', () => {
     await waitFor(() => {
       expect(medplum.searchResources).toHaveBeenCalledWith(
         'Task',
-        expect.stringContaining('encounter=Encounter/encounter-123'),
+        { encounter: 'Encounter/encounter-123', _count: '1000' },
         expect.any(Object)
       );
     });
   });
 
-  test('fetches clinical impressions for encounter', async () => {
+  test("fetches the encounter's note with the same search as the consistency Bot", async () => {
     vi.spyOn(medplum, 'searchResources');
 
     setup();
@@ -303,8 +303,15 @@ describe('EncounterChart', () => {
     await waitFor(() => {
       expect(medplum.searchResources).toHaveBeenCalledWith(
         'ClinicalImpression',
-        expect.stringContaining('encounter=Encounter/encounter-123')
+        noteSearch('Encounter/encounter-123', `Patient/${HomerSimpson.id}`),
+        expect.objectContaining({ cache: 'no-cache' })
       );
+    });
+    expect(noteSearch('Encounter/encounter-123', `Patient/${HomerSimpson.id}`)).toEqual({
+      encounter: 'Encounter/encounter-123',
+      subject: `Patient/${HomerSimpson.id}`,
+      _sort: '-_lastUpdated',
+      _count: '1',
     });
   });
 
@@ -777,6 +784,124 @@ describe('EncounterChart', () => {
       expect(noteSave).toBeGreaterThanOrEqual(0);
       expect(patch.mock.invocationCallOrder[noteSave]).toBeLessThan(execute.mock.invocationCallOrder[0]);
       expect(await screen.findByRole('alert')).toHaveTextContent('No outside discharge summary is on file');
+    });
+
+    test('a failed note save stops the check, keeps the text, and is saved again on retry', async () => {
+      const user = userEvent.setup();
+      const patch = vi.spyOn(medplum, 'patchResource').mockRejectedValueOnce(new Error('Network error'));
+      const execute = vi
+        .spyOn(medplum, 'executeBot')
+        .mockResolvedValue({ status: 'unavailable', reason: 'No outside discharge summary is on file' });
+      setup();
+      await screen.findByText('Fill chart note');
+
+      const textarea = screen.getByRole('textbox', { name: 'Chart note' });
+      await user.type(textarea, ' Continue lisinopril 20 mg.');
+      // Check before the 1.5 s debounce fires; the save fails.
+      await user.click(screen.getByRole('button', { name: 'Check note' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('The note could not be saved, so it was not checked');
+      expect(execute).not.toHaveBeenCalled();
+      expect(textarea).toHaveValue('Test clinical note Continue lisinopril 20 mg.');
+
+      await user.click(screen.getByRole('button', { name: 'Check note' }));
+      await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+      const saves = patch.mock.calls.filter(
+        ([type, , ops]) => type === 'ClinicalImpression' && JSON.stringify(ops).includes('Continue lisinopril 20 mg.')
+      );
+      expect(saves).toHaveLength(2);
+      expect(patch.mock.invocationCallOrder[1]).toBeLessThan(execute.mock.invocationCallOrder[0]);
+      expect((await medplum.readResource('ClinicalImpression', 'clinical-123')).note?.[0]?.text).toBe(
+        'Test clinical note Continue lisinopril 20 mg.'
+      );
+    });
+
+    test('Sign & Lock saves pending note text before signing', async () => {
+      const user = userEvent.setup();
+      await medplum.createResource(finished);
+      const impression = await medplum.createResource<ClinicalImpression>({
+        ...mockClinicalImpression,
+        id: 'ci-pending',
+        encounter: createReference(finished),
+      });
+      const patch = vi.spyOn(medplum, 'patchResource');
+      const create = vi.spyOn(medplum, 'createResource');
+      setup({ encounter: finished });
+      await user.type(await screen.findByRole('textbox', { name: 'Chart note' }), ' Continue 20 mg.');
+      // Sign before the 1.5 s debounce fires.
+      await user.click(screen.getByRole('button', { name: 'Sign note' }));
+      await user.click(await screen.findByText('Sign & Lock Note'));
+
+      await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'Provenance' })));
+      const noteSave = patch.mock.calls.findIndex(
+        ([type, , ops]) => type === 'ClinicalImpression' && JSON.stringify(ops).includes('Continue 20 mg.')
+      );
+      const signature = create.mock.calls.findIndex(([resource]) => resource.resourceType === 'Provenance');
+      expect(noteSave).toBeGreaterThanOrEqual(0);
+      expect(patch.mock.invocationCallOrder[noteSave]).toBeLessThan(create.mock.invocationCallOrder[signature]);
+      const saved = await medplum.readResource('ClinicalImpression', impression.id);
+      expect(saved).toMatchObject({ status: 'completed', note: [{ text: 'Test clinical note Continue 20 mg.' }] });
+    });
+
+    test('does not sign when the pending note cannot be saved', async () => {
+      const user = userEvent.setup();
+      await medplum.createResource(finished);
+      await medplum.createResource<ClinicalImpression>({
+        ...mockClinicalImpression,
+        id: 'ci-unsaved',
+        encounter: createReference(finished),
+      });
+      const patch = vi.spyOn(medplum, 'patchResource').mockRejectedValueOnce(new Error('Network error'));
+      const create = vi.spyOn(medplum, 'createResource');
+      setup({ encounter: finished });
+      await user.type(await screen.findByRole('textbox', { name: 'Chart note' }), ' Continue 20 mg.');
+      await user.click(screen.getByRole('button', { name: 'Sign note' }));
+      await user.click(await screen.findByText('Sign & Lock Note'));
+
+      // The failed call is the note save, made before anything else is signed or locked.
+      await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+      expect(patch).toHaveBeenCalledWith('ClinicalImpression', 'ci-unsaved', [
+        { op: 'add', path: '/note', value: [{ text: 'Test clinical note Continue 20 mg.' }] },
+      ]);
+      await act(async () => undefined);
+      expect(create).not.toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'Provenance' }));
+      expect((await medplum.readResource('ClinicalImpression', 'ci-unsaved')).status).toBe('in-progress');
+      expect(screen.getByRole('textbox', { name: 'Chart note' })).toHaveValue('Test clinical note Continue 20 mg.');
+    });
+
+    test("edits the newest note of the visit's patient, the one the Bot reads", async () => {
+      const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+      await medplum.createResource(finished);
+      const older = await medplum.createResource<ClinicalImpression>({
+        ...mockClinicalImpression,
+        id: 'ci-older',
+        encounter: createReference(finished),
+        note: [{ text: 'Older note' }],
+      });
+      await tick();
+      await medplum.createResource<ClinicalImpression>({
+        ...mockClinicalImpression,
+        id: 'ci-newer',
+        encounter: createReference(finished),
+        note: [{ text: 'Newer note' }],
+      });
+      await tick();
+      // Newest of all, but for another patient.
+      await medplum.createResource<ClinicalImpression>({
+        ...mockClinicalImpression,
+        id: 'ci-other-patient',
+        subject: { reference: 'Patient/someone-else' },
+        encounter: createReference(finished),
+        note: [{ text: 'Another patient note' }],
+      });
+      setup({ encounter: finished });
+
+      expect(await screen.findByRole('textbox', { name: 'Chart note' })).toHaveValue('Newer note');
+      const botNote = await medplum.searchOne(
+        'ClinicalImpression',
+        noteSearch(`Encounter/${finished.id}`, `Patient/${HomerSimpson.id}`)
+      );
+      expect(botNote?.id).toBe('ci-newer');
+      expect(botNote?.id).not.toBe(older.id);
     });
 
     test('Sign & Lock leaves a reconciliation task without an encounter open', async () => {

@@ -14,6 +14,8 @@ import type {
 import { useMedplum, useResource } from '@medplum/react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
+import { COMPLETE_LIST_COUNT } from '../config/constants';
+import { noteSearch } from '../utils/consistency';
 import { showErrorNotification } from '../utils/notifications';
 
 export interface EncounterChartHook {
@@ -61,9 +63,11 @@ export function useEncounterChart(encounter: WithId<Encounter> | Reference<Encou
     const enc = encounterResource;
 
     async function fetchTasks(): Promise<void> {
-      const taskResult = await medplum.searchResources('Task', `encounter=${getReferenceString(enc)}`, {
-        cache: 'no-cache',
-      });
+      const taskResult = await medplum.searchResources(
+        'Task',
+        { encounter: getReferenceString(enc), _count: COMPLETE_LIST_COUNT },
+        { cache: 'no-cache' }
+      );
       taskResult.sort((a: Task, b: Task) => {
         const dateA = new Date(a.authoredOn || '').getTime();
         const dateB = new Date(b.authoredOn || '').getTime();
@@ -72,10 +76,17 @@ export function useEncounterChart(encounter: WithId<Encounter> | Reference<Encou
       setTasks(taskResult);
     }
 
+    // The same note the consistency Bot reads.
     async function fetchClinicalImpressions(): Promise<void> {
+      const subject = enc.subject?.reference;
+      if (!subject) {
+        setClinicalImpression(undefined);
+        return;
+      }
       const clinicalImpressionResult = await medplum.searchResources(
         'ClinicalImpression',
-        `encounter=${getReferenceString(enc)}`
+        noteSearch(getReferenceString(enc), subject),
+        { cache: 'no-cache' }
       );
       setClinicalImpression(clinicalImpressionResult?.[0]);
     }

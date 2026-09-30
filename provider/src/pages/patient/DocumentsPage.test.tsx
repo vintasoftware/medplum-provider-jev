@@ -90,6 +90,31 @@ describe('DocumentsPage', () => {
     expect(screen.getByText('Added')).toBeInTheDocument();
   });
 
+  test('opens a document of this patient that is not on the current list page', async () => {
+    const older = await createDocument();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await createDocument();
+    const read = vi.spyOn(medplum, 'readResource');
+
+    setup(`/Patient/${patientId}/DocumentReference/${older.id}?_count=1&_sort=-_lastUpdated`);
+
+    await waitFor(() => expect(screen.getAllByRole('link')).toHaveLength(1));
+    expect(await screen.findByText('Author')).toBeInTheDocument();
+    expect(read).toHaveBeenCalledWith('DocumentReference', older.id);
+  });
+
+  test("does not open another patient's document by id", async () => {
+    await createDocument();
+    const other = await createDocument({ subject: { reference: 'Patient/someone-else' } });
+    const read = vi.spyOn(medplum, 'readResource');
+
+    setup(`/Patient/${patientId}/DocumentReference/${other.id}?_sort=-_lastUpdated`);
+
+    expect(await screen.findByText('Select a document to view it.')).toBeInTheDocument();
+    expect(read).toHaveBeenCalledWith('DocumentReference', other.id);
+    expect(screen.queryByText('Author')).not.toBeInTheDocument();
+  });
+
   test('pins the full search (filters, sort, count, total) into the URL', async () => {
     await createDocument();
 

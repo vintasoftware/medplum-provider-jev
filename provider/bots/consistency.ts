@@ -1,5 +1,6 @@
 import type { BotEvent, MedplumClient } from '@medplum/core';
 import type { ClinicalImpression, DocumentReference, Encounter, MedicationRequest } from '@medplum/fhirtypes';
+import { COMPLETE_LIST_COUNT } from '../src/config/constants';
 import contract from '../src/data/model-contract.json' with { type: 'json' };
 
 // Reads the visit note, the newest outside discharge summary and the active medications
@@ -14,6 +15,14 @@ const DISCHARGE_SUMMARY_TYPE = 'http://loinc.org|18842-5';
 const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const { limits, labels } = contract;
+
+/**
+ * The search that picks a visit's note: the most recently updated ClinicalImpression for the
+ * encounter and its patient. The editor, the Bot and the tutorial use it so they read the same note.
+ */
+export function noteSearch(encounter: string, subject: string): Record<string, string> {
+  return { encounter, subject, _sort: '-_lastUpdated', _count: '1' };
+}
 
 type Label = (typeof contract.labels)[number];
 type SourceDocument = { title: string; date: string; author: string; text: string };
@@ -40,6 +49,8 @@ export type ReviewOutput =
       mentions_hospital_stay: number;
       documents: { title: string; date: string; text: string; source: string }[];
       note_version: string | undefined;
+      /** Version of the discharge summary that was checked. Missing in Bot responses before it was added. */
+      outside_version?: string;
     }
   | { status: 'unavailable'; reason: string };
 
@@ -160,6 +171,7 @@ async function readChart(
   note: SourceDocument;
   sources: string[];
   noteVersion?: string;
+  outsideVersion?: string;
 }> {
   let encounter: Encounter;
   try {
@@ -171,8 +183,8 @@ async function readChart(
   if (!subject?.startsWith('Patient/')) throw new Unavailable('This visit is not accessible');
 
   const [impression, requests, summaries] = await Promise.all([
-    medplum.searchOne('ClinicalImpression', { encounter: `Encounter/${encounterId}`, _sort: '-_lastUpdated' }),
-    medplum.searchResources('MedicationRequest', { subject, status: 'active' }),
+    medplum.searchOne('ClinicalImpression', noteSearch(`Encounter/${encounterId}`, subject)),
+    medplum.searchResources('MedicationRequest', { subject, status: 'active', _count: COMPLETE_LIST_COUNT }),
     medplum.searchResources('DocumentReference', {
       subject,
       type: DISCHARGE_SUMMARY_TYPE,
@@ -212,6 +224,7 @@ async function readChart(
     note,
     sources: [`DocumentReference/${summary.id}`, `ClinicalImpression/${impression.id}`],
     noteVersion: impression.meta?.versionId,
+    outsideVersion: summary.meta?.versionId,
   };
 }
 
@@ -423,6 +436,7 @@ export async function review(medplum: MedplumClient, event: BotEvent, encounterI
       { title: chart.note.title, date: chart.note.date, text: chart.note.text, source: chart.sources[1] },
     ],
     note_version: chart.noteVersion,
+    outside_version: chart.outsideVersion,
   };
 }
 

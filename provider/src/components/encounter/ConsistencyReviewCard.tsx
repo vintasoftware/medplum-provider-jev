@@ -15,16 +15,7 @@ import {
 } from '@mantine/core';
 import type { WithId } from '@medplum/core';
 import { createReference, formatDateTime, getReferenceString } from '@medplum/core';
-import type {
-  ClinicalImpression,
-  DetectedIssue,
-  DocumentReference,
-  Encounter,
-  Patient,
-  Practitioner,
-  Reference,
-  Task,
-} from '@medplum/fhirtypes';
+import type { DetectedIssue, Encounter, Patient, Practitioner, Reference, Task } from '@medplum/fhirtypes';
 import { MedplumLink, useMedplum, useMedplumProfile } from '@medplum/react';
 import { IconAlertTriangle, IconClipboardPlus, IconPencil, IconSignature } from '@tabler/icons-react';
 import type { JSX, ReactNode } from 'react';
@@ -35,13 +26,14 @@ import { TOUR } from '../../pages/guided-demo/tour/anchors';
 import type { ReviewLabel, StoredCheck } from '../../utils/consistency';
 import {
   appendMitigation,
+  attachmentText,
   buildDetectedIssue,
-  decodeAttachment,
   findLatestCheck,
   headlineResult,
   implicatedDocument,
   implicatedNote,
   noteText,
+  readCheckedVersion,
   readStoredCheck,
   RECONCILIATION_TASK_CREATED,
   REVIEW_LABEL_COLORS,
@@ -58,7 +50,7 @@ export interface ConsistencyReviewCardProps {
   readonly noteText: string;
   /** Raised by the chart to request a check. The value on mount never triggers one. */
   readonly requestSeq: number;
-  /** Saves any pending note text before the Bot reads it. */
+  /** Saves any pending note text before the Bot reads it; rejects when it could not be saved. */
   readonly beforeCheck: () => Promise<void>;
   readonly locked: boolean;
   readonly onEditNote: () => void;
@@ -67,10 +59,14 @@ export interface ConsistencyReviewCardProps {
   readonly onRunningChange?: (running: boolean) => void;
 }
 
+/** Passages as the check read them. A source is missing once `loaded` if its checked version cannot be read. */
 interface Passages {
+  loaded: boolean;
   outside?: { title: string; date?: string; text: string };
   note?: string;
 }
+
+const PASSAGE_UNAVAILABLE = 'The version that was checked could not be loaded.';
 
 function formatDay(date: string | undefined): string {
   if (!date) {
@@ -91,6 +87,16 @@ function highlight(text: string, index: number | undefined): ReactNode {
       <mark>{sentence}</mark>
       {text.slice(start + sentence.length)}
     </>
+  );
+}
+
+function passageFallback(loaded: boolean): ReactNode {
+  return loaded ? (
+    <Text span c="dimmed" fs="italic" inherit>
+      {PASSAGE_UNAVAILABLE}
+    </Text>
+  ) : (
+    '…'
   );
 }
 
@@ -124,7 +130,7 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
   const profile = useMedplumProfile();
   const demo = useGuidedDemo();
   const [issue, setIssueState] = useState<WithId<DetectedIssue>>();
-  const [passages, setPassages] = useState<Passages>({});
+  const [passages, setPassages] = useState<Passages>({ loaded: false });
   const [running, setRunningState] = useState(false);
   const [error, setError] = useState<string>();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -179,39 +185,39 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
       .catch(showErrorNotification);
   }, [medplum, issue]);
 
-  // Re-read the passages from the exact sources the check used.
+  // Re-read the passages from the exact versions the check used. A check's sources never change,
+  // so a mitigation (a new issue object with the same id) does not reload them.
   useEffect(() => {
+    setPassages({ loaded: false });
     if (!issue) {
-      return;
+      return undefined;
     }
     let cancelled = false;
-    const load = async (): Promise<void> => {
-      const docRef = implicatedDocument(issue);
-      const note = implicatedNote(issue);
+    const checkedAt = readStoredCheck(issue)?.checked_at ?? '';
+    const load = async (): Promise<Passages> => {
+      const docSource = implicatedDocument(issue);
+      const noteSource = implicatedNote(issue);
       const [doc, impression] = await Promise.all([
-        docRef ? medplum.readReference<DocumentReference>({ reference: docRef }) : undefined,
-        note
-          ? note.versionId
-            ? medplum.readVersion('ClinicalImpression', note.id, note.versionId)
-            : medplum.readResource('ClinicalImpression', note.id)
-          : undefined,
+        docSource ? readCheckedVersion(medplum, 'DocumentReference', docSource, checkedAt) : undefined,
+        noteSource ? readCheckedVersion(medplum, 'ClinicalImpression', noteSource, checkedAt) : undefined,
       ]);
-      const outsideText = doc ? decodeAttachment(doc) : undefined;
-      if (!cancelled) {
-        setPassages({
-          outside:
-            doc && outsideText
-              ? { title: doc.description ?? 'Discharge summary', date: doc.date, text: outsideText }
-              : undefined,
-          note: noteText(impression as ClinicalImpression | undefined),
-        });
-      }
+      const outsideText = doc ? await attachmentText(medplum, doc).catch(() => undefined) : undefined;
+      return {
+        loaded: true,
+        outside:
+          doc && outsideText
+            ? { title: doc.description ?? 'Discharge summary', date: doc.date, text: outsideText }
+            : undefined,
+        note: impression ? noteText(impression) : undefined,
+      };
     };
-    load().catch(showErrorNotification);
+    load()
+      .then((loaded) => !cancelled && setPassages(loaded))
+      .catch(showErrorNotification);
     return () => {
       cancelled = true;
     };
-  }, [medplum, issue]);
+  }, [medplum, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runCheck = useCallback(async (): Promise<void> => {
     if (runningRef.current) {
@@ -220,7 +226,13 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
     setRunning(true);
     setError(undefined);
     try {
-      await beforeCheck();
+      try {
+        await beforeCheck();
+      } catch {
+        // Never check an older server copy than the text on screen.
+        setError('The note could not be saved, so it was not checked');
+        return;
+      }
       const review = await reviewEncounter(medplum, encounter.id);
       if (review.status !== 'ok') {
         setError(review.reason);
@@ -346,7 +358,9 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
               Outside document · {passages.outside?.title ?? 'Discharge summary'} {outsideDate && `· ${outsideDate}`}
             </Text>
             <Text size="sm" style={{ whiteSpace: 'pre-wrap' }} mt={4}>
-              {passages.outside ? highlight(passages.outside.text, headline.sentence_outside_index) : '…'}
+              {passages.outside
+                ? highlight(passages.outside.text, headline.sentence_outside_index)
+                : passageFallback(passages.loaded)}
             </Text>
           </Box>
           <Box>
@@ -354,7 +368,9 @@ export function ConsistencyReviewCard(props: ConsistencyReviewCardProps): JSX.El
               Today's visit note {stale && '· as checked'}
             </Text>
             <Text size="sm" style={{ whiteSpace: 'pre-wrap' }} mt={4}>
-              {passages.note !== undefined ? highlight(passages.note, headline.sentence_note_index) : '…'}
+              {passages.note !== undefined
+                ? highlight(passages.note, headline.sentence_note_index)
+                : passageFallback(passages.loaded)}
             </Text>
           </Box>
         </SimpleGrid>

@@ -172,6 +172,46 @@ describe('consistency Bot', () => {
       expect.stringMatching(/^DocumentReference\//),
       `ClinicalImpression/${impression.id}`,
     ]);
+    const summary = await medplum.readReference<DocumentReference>({ reference: result.documents[0].source });
+    expect(result.outside_version).toBe(summary.meta?.versionId);
+  });
+
+  test("reads the newest note of this visit's patient and every active medication", async () => {
+    const searchOne = vi.spyOn(medplum, 'searchOne');
+    const searchResources = vi.spyOn(medplum, 'searchResources');
+    const older = await medplum.createResource<ClinicalImpression>({
+      ...impression,
+      id: undefined,
+      meta: undefined,
+      note: [{ text: 'An older note for this visit.' }],
+    });
+    // Saving the note makes it the newest again.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await medplum.updateResource({ ...impression, note: [{ text: NOTE }] });
+    // A note that names this encounter but another patient is never read.
+    await medplum.createResource<ClinicalImpression>({
+      ...impression,
+      id: undefined,
+      meta: undefined,
+      subject: { reference: 'Patient/someone-else' },
+      note: [{ text: 'A note for another patient.' }],
+    });
+
+    const result = await handler(medplum, event(review()));
+    if (result.status !== 'ok') throw new Error('expected ok');
+    expect(result.documents[1]).toMatchObject({ source: `ClinicalImpression/${impression.id}`, text: NOTE });
+    expect(result.documents[1].source).not.toContain(older.id);
+    expect(searchOne).toHaveBeenCalledWith('ClinicalImpression', {
+      encounter: `Encounter/${encounter.id}`,
+      subject: `Patient/${patient.id}`,
+      _sort: '-_lastUpdated',
+      _count: '1',
+    });
+    expect(searchResources).toHaveBeenCalledWith('MedicationRequest', {
+      subject: `Patient/${patient.id}`,
+      status: 'active',
+      _count: '1000',
+    });
   });
 
   test('never writes to the chart', async () => {

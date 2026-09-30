@@ -62,7 +62,8 @@ export function EncountersPage(): JSX.Element {
     [patientId, location.search]
   );
 
-  // Resolve an out-of-list selection silently (a stale/deleted encounter id shouldn't toast).
+  // Resolve an out-of-list selection silently (a stale/deleted encounter id shouldn't toast). An
+  // encounter read by id is shown only when it belongs to the route patient, like the list.
   const resolveSelected = useCallback(
     async (id: string, items: WithId<Encounter>[], client: MedplumClient): Promise<WithId<Encounter> | undefined> => {
       const found = items.find((e) => e.id === id);
@@ -70,12 +71,13 @@ export function EncountersPage(): JSX.Element {
         return found;
       }
       try {
-        return await client.readResource('Encounter', id);
+        const encounter = await client.readResource('Encounter', id);
+        return encounter.subject?.reference === `Patient/${patientId}` ? encounter : undefined;
       } catch {
         return undefined;
       }
     },
-    []
+    [patientId]
   );
 
   return (
