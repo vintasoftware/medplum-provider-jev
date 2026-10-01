@@ -6,6 +6,7 @@ import type { ModelService } from '../bots/consistency';
 import { buildRequest, modelService } from '../bots/consistency';
 import contract from '../src/data/model-contract.json';
 import { splitSentences } from '../src/utils/consistency-review';
+import { highlightIssues } from './gen-cases/validate-cases';
 import type { MeasurementCase } from './measure-jev';
 import { measure, measurementCases } from './measure-jev';
 
@@ -71,6 +72,13 @@ describe('measure-jev', () => {
     ]);
     expect(ids).toHaveLength(100);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('every expected highlight names exactly one sentence, as the scorer assumes', () => {
+    for (const c of measurementCases()) {
+      expect(highlightIssues(c.id, 'outside_document', c.outside.text, c.highlight.outside)).toEqual([]);
+      expect(highlightIssues(c.id, 'visit_note', c.note.text, c.highlight.note)).toEqual([]);
+    }
   });
 
   test('sends the Bot request, scores labels and highlights, and never logs the key', async () => {

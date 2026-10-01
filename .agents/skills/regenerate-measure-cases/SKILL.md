@@ -55,10 +55,9 @@ expected label, matching `model-contract.json`'s three criteria:
   range of it); one document missing a dose vs. missing the medication
   entirely; dated lists with no connecting language.
 
-Stay within `model-contract.json`'s `limits`: `text_max` 4000, `title_max` 120,
-`total_text_max` 7000, `max_sentences` 40. The Jebadiah self-hosted server also refuses prompts
-over 4,096 tokens, so keep each case short (well under 300 characters per document is typical
-and plenty).
+The test enforces the Bot's document limits and at most 19 sentences per document (the Modal
+Server's limit for the highlight question). The Jebadiah server also refuses prompts over
+4,096 tokens, so keep each case short: 1–3 sentences per document is typical and plenty.
 
 ## Regenerating: write specs, then spawn subagents
 

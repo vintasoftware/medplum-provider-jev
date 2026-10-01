@@ -57,7 +57,7 @@ function docIssues(caseId: string, field: Field, doc: SourceDocument): Issue[] {
   return issues;
 }
 
-function highlightIssues(caseId: string, field: Field, text: string, expected: string | null): Issue[] {
+export function highlightIssues(caseId: string, field: Field, text: string, expected: string | null): Issue[] {
   if (expected === null) {
     return [];
   }
@@ -105,10 +105,7 @@ function specIssues(item: GeneratedCase, spec: Spec | undefined): Issue[] {
  * @param specs - The specs they were written from; the committed specs by default.
  * @returns Every issue found; empty when the batch is clean.
  */
-export function validateCases(
-  cases: GeneratedCase[] = generated.cases,
-  specs: Spec[] = specsFile.specs
-): Issue[] {
+export function validateCases(cases: GeneratedCase[] = generated.cases, specs: Spec[] = specsFile.specs): Issue[] {
   const specById = new Map(specs.map((s) => [s.id, s]));
   const issues: Issue[] = [];
   const seenIds = new Set<string>();

@@ -53,7 +53,10 @@ export function measurementCases(): MeasurementCase[] {
     medication: s.medication,
     outside,
     note: { title: "Today's visit note", date: s.visit_date, author: "this clinic's provider", text: v.note },
-    highlight: { outside: s.highlight.outside_document, note: s.highlight.visit_note[v.id as keyof typeof s.highlight.visit_note] ?? null },
+    highlight: {
+      outside: s.highlight.outside_document,
+      note: s.highlight.visit_note[v.id as keyof typeof s.highlight.visit_note] ?? null,
+    },
   }));
   const batch: MeasurementCase[] = generated.cases.map((c) => ({
     id: c.id,
