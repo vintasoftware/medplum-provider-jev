@@ -188,9 +188,8 @@
 </figure>
 
 <!-- 4. The four scenario notes and what the card says for each. -->
-<figure id="side-paths" style="height:640px">
-  <div class="headline" style="position:absolute;left:0;right:0;top:50px">Four notes, three answers</div>
-  <div style="position:absolute;left:70px;right:70px;top:140px;display:flex;flex-direction:column;gap:18px">
+<figure id="side-paths" style="height:550px">
+  <div style="position:absolute;left:70px;right:70px;top:50px;display:flex;flex-direction:column;gap:18px">
     <div class="card" style="display:grid;grid-template-columns:560px 1fr;align-items:center;padding:20px 26px;gap:24px">
       <div style="font-size:20px;line-height:1.4"><span class="eyebrow" style="font-size:13px;display:block;margin-bottom:4px">Plan copied from the chart</span><mark>Plan: continue lisinopril 10 mg daily.</mark></div>
       <div><span class="chip conflict">Potential conflict</span><div style="font-size:17px;color:var(--muted);margin-top:8px">The hospital raised it to 20 mg.</div></div>
@@ -260,13 +259,12 @@
 </figure>
 
 <!-- 6. What each provider choice records in FHIR (adapted from the video's decision scene). -->
-<figure id="fhir-records" style="height:660px">
-  <div class="headline" style="position:absolute;left:0;right:0;top:48px">The provider decides. FHIR remembers.</div>
-  <div class="card" style="position:absolute;left:70px;right:70px;top:130px;padding:22px 28px;display:flex;align-items:center;gap:22px">
+<figure id="fhir-records" style="height:578px">
+  <div class="card" style="position:absolute;left:70px;right:70px;top:48px;padding:22px 28px;display:flex;align-items:center;gap:22px">
     <div class="mono" style="font-size:20px;font-weight:600;color:var(--vinta);flex:none">DetectedIssue</div>
     <div style="font-size:19px;line-height:1.45;color:var(--body)">Every check. Points to the visit, the exact note version and the outside document. Holds labels, probabilities and sentence positions, <b>no copied chart text</b>.</div>
   </div>
-  <div style="position:absolute;left:70px;right:70px;top:282px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
+  <div style="position:absolute;left:70px;right:70px;top:200px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
     <div class="card" style="padding:26px 26px 28px;height:262px">
       <div style="width:54px;height:54px;border-radius:15px;background:#e8efff;display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1753ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></div>
       <div style="font-size:23px;font-weight:700;margin:16px 0 10px">Edit the note</div>
@@ -283,7 +281,7 @@
       <div style="font-size:18px;line-height:1.45;color:var(--body)">A reconciliation <span class="mono" style="font-size:16px">Task</span> without <span class="mono" style="font-size:16px">Task.encounter</span>, so Sign &amp; Lock leaves it open.</div>
     </div>
   </div>
-  <div style="position:absolute;left:0;right:0;top:586px;text-align:center;font-size:22px;font-weight:600;color:var(--body)">The model never changes the chart.</div>
+  <div style="position:absolute;left:0;right:0;top:504px;text-align:center;font-size:22px;font-weight:600;color:var(--body)">The model never changes the chart.</div>
 </figure>
 
 <!-- 7. Hosted Jev on nine synthetic inputs. -->
@@ -399,7 +397,7 @@ const BACKENDS = [
     ['Input', 'The same request as hosted Jev'],
     ['Setup', 'Weight staging, a GPU Server, proxy tokens, cold starts'],
     ['Cost', 'About $3.16 per warm GPU hour at list prices, scales to zero'],
-    ['PHI path', 'Modal Enterprise BAA plus Medplum\'s BAA plan'],
+    ['PHI path', 'Modal Enterprise BAA'],
   ] },
 ];
 document.getElementById('backend-cards').innerHTML = BACKENDS.map((b) => `
