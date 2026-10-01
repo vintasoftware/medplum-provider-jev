@@ -84,7 +84,7 @@ As of October 1, 2026, model `jev-1.13.0` matched our expected label on 98 of 10
 
 ![Hosted Jev, October 1, 2026, model jev-1.13.0: 98 of 100 labels match the expected answer and 199 of 200 highlights land on the right sentence.](article/images/results.png)
 
-Both label misses are notes that name the old dose, the new dose and the reason for the change, which the Bot's criteria call `agreement`; Jev scored them `potential_conflict` at 0.78 and 0.70. A third such note flips between the two labels at about 0.5 from round to round. Most acknowledged changes scored correctly, so the sensitivity is to the specific phrasing. The one highlight miss picked a neighboring sentence in a note that says "once a day" where the discharge summary says "daily".
+Both label misses are notes that name the old dose, the new dose and the reason for the change, which the Bot's criteria call `agreement`; Jev scored them `potential_conflict` at 0.78 and 0.70. Most acknowledged changes scored correctly, so the sensitivity is to the specific phrasing. The one highlight miss picked a neighboring sentence in a note that says "once a day" where the discharge summary says "daily".
 
 That result makes acknowledgment phrasing part of the work still to evaluate. These are synthetic inputs generated from structured specs, not clinician-reviewed cases; they show how the model responds to our questions, not clinical accuracy. A clinical evaluation needs clinician-reviewed labels and must treat false agreements, which miss a dose error, differently from false conflicts, which cost the provider a review. Therefore, the displayed scores are a distribution over the available answers, not a measure of clinical correctness.
 
