@@ -109,8 +109,9 @@ Edit the JSON directly; the Bot, the app and the measurement all read it:
 | `provider/src/data/guided-scenario.json` | The synthetic discharge summary, prior note and side-path notes |
 | `provider/scripts/measure-cases.json` | Expected labels and highlights for the guided demo's own scenario notes, so `measure` checks what the demo sends |
 | `provider/scripts/gen-cases/` | The larger generated benchmark: specs, generated cases and how to extend them |
+| `benchmark-runs/` | The measurement runs the article cites, one JSON line per case and round |
 
-Then run `npm --prefix provider run measure`, redeploy with `npm --prefix provider run deploy:bot`, and re-record the e2e answers (below). `measure` needs `TYPESAFE_API_KEY` in the root `.env` and writes `artifacts/typesafe-run-<UTC>.jsonl` with each label, the probabilities and whether the highlights hit the expected sentences.
+Then run `npm --prefix provider run measure`, redeploy with `npm --prefix provider run deploy:bot`, and re-record the e2e answers (below). `measure` needs `TYPESAFE_API_KEY` in the root `.env` and writes `artifacts/typesafe-run-<UTC>.jsonl` with each label, the probabilities and whether the highlights hit the expected sentences. The runs behind the article's numbers are committed in [`benchmark-runs/`](benchmark-runs/README.md).
 
 ## End-to-end tests
 

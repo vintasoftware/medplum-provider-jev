@@ -10,6 +10,8 @@ plain `measure` checks the exact notes the demo sends).
 - `validate-cases.ts` (+ `.test.ts`) — checks a generated-cases file against the model contract's
   limits and the specs it came from. Run: `npm --prefix provider run validate:generated-cases`.
 
+**Runs cited by the documents** live in `../../../benchmark-runs/`.
+
 **To add more cases or regenerate**, see the `regenerate-measure-cases` skill
 (`.agents/skills/regenerate-measure-cases/SKILL.md`) — it has the full workflow: how to design a
 case, how to write specs, and how to spawn subagents to write the prose.

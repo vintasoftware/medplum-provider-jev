@@ -116,7 +116,8 @@ template, so each case reads differently; that variety is the point.
    parsing or an import elsewhere.
 2. Run `npm --prefix provider run measure:generated` (needs `TYPESAFE_API_KEY` in the root
    `.env`; costs money per call) to see how hosted Jev answers the new batch. It writes
-   `artifacts/typesafe-run-<UTC>.jsonl`.
+   `artifacts/typesafe-run-<UTC>.jsonl`. Copy the run into `benchmark-runs/` and add it to that
+   folder's README table when a document cites its numbers.
 3. Update [ARTICLE.md](../../../ARTICLE.md)'s "How good is Jev?" section and
    `article/figures.html`'s `results` figure with the new totals and any newly-found failure
    pattern, and re-render with `python article/render_figures.py` (needs Playwright, ffmpeg and
