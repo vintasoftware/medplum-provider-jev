@@ -551,8 +551,8 @@ export function readSentence(answer: any, text: string): string | null | undefin
 /**
  * Medication `i`'s result from the model's answers.
  *
- * The no-dose rule: Jebadiah, AutoJev and Decider each labeled a note with no dose `agreement`
- * while their own highlight question found no dose sentence. The dose criteria say a missing
+ * The no-dose rule: the self-hosted models (Jebadiah, AutoJev) labeled a note with no dose
+ * `agreement` while their own highlight question found no dose sentence. The dose criteria say a missing
  * dose is insufficient information, so the Bot trusts the highlight answer over an `agreement`
  * label. It never downgrades `potential_conflict`. Hosted Jev labels that note correctly itself.
  * @param answers - All answers of the model response.

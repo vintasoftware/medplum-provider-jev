@@ -95,7 +95,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Lint with Medplum's ESLint config | `npm --prefix provider run lint` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
 | Measure hosted Jev on the guided demo's scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
-| Measure hosted Jev on the larger generated benchmark (~90 cases) | `npm --prefix provider run measure:generated`; see `provider/scripts/gen-cases/README.md` |
+| Measure hosted Jev on the larger generated benchmark (96 cases; 100 with the scenario notes) | `npm --prefix provider run measure:generated`; see `provider/scripts/gen-cases/README.md` |
 | Bot artifact smoke test | `npm --prefix provider run test:bot-bundle` |
 | Production build | `npm --prefix provider run build` |
 
@@ -107,7 +107,7 @@ Edit the JSON directly; the Bot, the app and the measurement all read it:
 | --- | --- |
 | `provider/src/data/model-contract.json` | Model, labels, text limits and the question wording the Bot sends to Jev |
 | `provider/src/data/guided-scenario.json` | The synthetic discharge summary, prior note and side-path notes |
-| `provider/scripts/measure-cases.json` | The guided demo's scenario notes, needed for the e2e cassette replay |
+| `provider/scripts/measure-cases.json` | Expected labels and highlights for the guided demo's own scenario notes, so `measure` checks what the demo sends |
 | `provider/scripts/gen-cases/` | The larger generated benchmark: specs, generated cases and how to extend them |
 
 Then run `npm --prefix provider run measure`, redeploy with `npm --prefix provider run deploy:bot`, and re-record the e2e answers (below). `measure` needs `TYPESAFE_API_KEY` in the root `.env` and writes `artifacts/typesafe-run-<UTC>.jsonl` with each label, the probabilities and whether the highlights hit the expected sentences.
@@ -184,7 +184,7 @@ Add `TYPESAFE_API_KEY` and `CONSISTENCY_BACKEND=typesafe` as ordinary string sec
 
 ## Privacy
 
-TypeSafe's hosted API is used here with synthetic records only. A deployment that processes PHI needs a BAA or DPA with TypeSafe, or the self-hosted path, plus the controls described in the article.
+TypeSafe's hosted API is used here with synthetic records only. TypeSafe does not offer a BAA yet, so a deployment that processes PHI needs either a BAA or DPA from them once available, or the self-hosted path, plus the controls described in the article.
 
 ## Provenance
 

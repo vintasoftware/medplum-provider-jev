@@ -1,8 +1,8 @@
 # Generated measure cases
 
 A larger, regenerable benchmark for `npm --prefix provider run measure:generated`, separate
-from the hand-picked `measure-cases.json` (which stays scoped to the guided demo's four scenario
-notes, needed for its e2e cassette replay).
+from `measure-cases.json` (which stays scoped to the guided demo's four scenario notes, so the
+plain `measure` checks the exact notes the demo sends).
 
 - `case-specs.json` — structured specs (medication, doses, acknowledgment flag, expected label),
   no prose.

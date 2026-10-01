@@ -6,10 +6,10 @@ description: Add to or regrow the generated benchmark of dose-reconciliation tes
 # Regenerating the generated measure-case benchmark
 
 `provider/scripts/gen-cases/generated-cases.json` holds a larger, regenerable batch of cases
-for `npm --prefix provider run measure:generated`, in the same shape as the hand-picked
-`measure-cases.json` used by the plain `measure` script (which stays scoped to the guided
-demo's four scenario notes, needed for its e2e cassette replay). This skill is the workflow for
-growing that generated batch.
+for `npm --prefix provider run measure:generated`, in the same shape as the entries
+`measure-cases.json` once held. That file now covers only the guided demo's four scenario
+notes, so the plain `measure` script checks the exact notes the demo sends. This skill is the
+workflow for growing the generated batch.
 
 Don't reach for Synthea or another synthetic-patient generator here: its clinical notes are
 filled-in templates generated from its own simulated record, so a note can never disagree with
@@ -31,7 +31,7 @@ prose and the conflict still have to come from a spec, not a generated chart.
   against the model contract's limits and catches mistakes a spec-writer could make: a missing
   highlight substring, a date inside document text, a medication mentioned where the spec
   forbids it, or a dose term absent from the document that's supposed to state it. Run
-  standalone: `npx tsx provider/scripts/gen-cases/validate-cases.ts [path]`, or
+  standalone: `node provider/scripts/gen-cases/validate-cases.ts [path]`, or
   `npm --prefix provider run validate:generated-cases`.
 
 ## Case design
@@ -51,7 +51,7 @@ expected label, matching `model-contract.json`'s three criteria:
 - **Hard cases worth covering:** equivalent wording that should read as agreement ("two 10 mg
   tablets" vs. "20 mg", "BID" vs. "twice daily", "mcg" vs. "mg"); acknowledgment phrasing that
   might not be read as acknowledgment (a past hosted-Jev run scored three differently-phrased
-  "explained dose change" cases as `potential_conflict` at 0.57–0.83 confidence where most
+  "explained dose change" cases as `potential_conflict` with probability 0.57–0.83 where most
   similarly-worded ones scored correctly — this looks sensitive to the specific acknowledgment
   wording, so cover a range of it); one document missing a dose vs. missing the medication
   entirely; dated lists with no connecting language.

@@ -1,5 +1,5 @@
 {
-  "_about": "Inputs for npm --prefix provider run measure. These are the guided demo's four scenario notes, needed for the demo and its recorded e2e cassettes. The larger generated benchmark lives in scripts/gen-cases/generated-cases.json (npm run measure:generated); see scripts/gen-cases/README.md. `expected` is an authored synthetic reference, not clinician-validated; `highlight` is a substring of the sentence a reader expects highlighted, or null when no sentence gives a dose.",
+  "_about": "Inputs for npm --prefix provider run measure. These are the expected labels and highlights for the guided demo's four scenario notes (the note text itself comes from src/data/guided-scenario.json), so `measure` checks the exact notes the demo sends before the e2e cassettes are re-recorded. The larger generated benchmark lives in scripts/gen-cases/generated-cases.json (npm run measure:generated); see scripts/gen-cases/README.md. `expected` is an authored synthetic reference, not clinician-validated; `highlight` is a substring of the sentence a reader expects highlighted, or null when no sentence gives a dose.",
   "scenario": {
     "medication": "lisinopril",
     "discharge_date": "2026-09-16",

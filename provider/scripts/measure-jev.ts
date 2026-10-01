@@ -2,14 +2,15 @@
 // exactly the state and questions the Bot sends (built by the Bot's own buildRequest).
 //
 //   npm --prefix provider run measure           # hosted Jev, the demo's 4 scenario notes, one round
-//   npm --prefix provider run measure:generated # hosted Jev, the ~90-case generated benchmark
+//   npm --prefix provider run measure:generated # hosted Jev, the 96-case generated benchmark
 //   npm --prefix provider run measure -- --rounds 3
 //   npm --prefix provider run measure -- --backend modal  # the self-hosted model on the private Modal Server
 //   npm --prefix provider run measure -- --cases scripts/gen-cases/generated-cases.json
 //
 // The generated batch (scripts/gen-cases/, see its README.md or the regenerate-measure-cases
-// skill to add more) is the benchmark; the scenario notes above stay here because the guided
-// demo's e2e cassettes replay them.
+// skill to add more) is the benchmark; the scenario notes stay here so a question or contract
+// change is checked against the exact notes the guided demo sends before its e2e cassettes are
+// re-recorded.
 //
 // Hosted Jev needs TYPESAFE_API_KEY; Modal needs CONSISTENCY_MODEL_URL, CONSISTENCY_MODAL_KEY
 // and CONSISTENCY_MODAL_SECRET, in the environment or the root .env. Writes
