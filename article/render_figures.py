@@ -4,6 +4,8 @@
 
 Needs Playwright (requirements-dev.txt) and ffmpeg, which pulls the poster frame from
 videos/out/demo/guided-demo.mp4 (the captioned guided demo recorded by videos/build.sh).
+Without a fresh recording, download the published take from the README's demo-video link
+into that path.
 """
 import subprocess
 import tempfile
