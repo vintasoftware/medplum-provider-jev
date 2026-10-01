@@ -6,6 +6,7 @@ import type { ModelService } from '../bots/consistency';
 import { buildRequest, modelService } from '../bots/consistency';
 import contract from '../src/data/model-contract.json';
 import { splitSentences } from '../src/utils/consistency-review';
+import { highlightIssues } from './gen-cases/validate-cases';
 import type { MeasurementCase } from './measure-jev';
 import { measure, measurementCases } from './measure-jev';
 
@@ -61,32 +62,22 @@ function outFile(): string {
 }
 
 describe('measure-jev', () => {
-  test('covers the authored dose cases and every scenario variant', () => {
+  test('runs the scenario notes first, then every generated case, each once', () => {
     const ids = measurementCases().map((c) => c.id);
-    expect(ids).toEqual([
-      'dose-conflict',
-      'dose-agreement',
-      'dose-dated-change',
-      'dose-missing',
-      'dose-dates-unexplained',
+    expect(ids.slice(0, 4)).toEqual([
       'scenario-shortcut-from-chart',
       'scenario-resolved-after-edit',
       'scenario-no-dose',
       'scenario-unexplained-40mg',
     ]);
+    expect(ids).toHaveLength(100);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('every expected highlight names exactly one sentence, as the scorer assumes', () => {
     for (const c of measurementCases()) {
-      for (const [field, expected] of [
-        ['outside', c.highlight.outside],
-        ['note', c.highlight.note],
-      ] as const) {
-        if (expected) {
-          const text = field === 'outside' ? c.outside.text : c.note.text;
-          expect(
-            splitSentences(text).some((s) => s.includes(expected)),
-            `${c.id} ${field}`
-          ).toBe(true);
-        }
-      }
+      expect(highlightIssues(c.id, 'outside_document', c.outside.text, c.highlight.outside)).toEqual([]);
+      expect(highlightIssues(c.id, 'visit_note', c.note.text, c.highlight.note)).toEqual([]);
     }
   });
 
@@ -115,8 +106,8 @@ describe('measure-jev', () => {
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l));
-    expect(rows[0]).toMatchObject({ case_id: 'dose-conflict', matches_reference: false });
-    expect(rows[1]).toMatchObject({ case_id: 'dose-agreement', matches_reference: true });
+    expect(rows[0]).toMatchObject({ case_id: 'scenario-shortcut-from-chart', matches_reference: false });
+    expect(rows[1]).toMatchObject({ case_id: 'scenario-resolved-after-edit', matches_reference: true });
     expect(rows[1].result.highlight.note_ok).toBe(true);
     expect(rows[1].result.highlight.outside_ok).toBe(false);
     expect(readFileSync(file, 'utf8') + log.join('\n')).not.toContain('ts-secret');

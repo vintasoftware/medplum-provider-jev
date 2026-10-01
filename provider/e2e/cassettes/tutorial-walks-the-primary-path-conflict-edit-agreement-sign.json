@@ -1,6 +1,6 @@
 {
   "description": "tutorial walks the primary path: conflict, edit, agreement, sign",
-  "recorded_at": "2026-09-30T14:45:36.549Z",
+  "recorded_at": "2026-10-01T22:59:05.259Z",
   "contract_sha256": "c20f9cf137532963ea9bacf65c7e010d320cae5406ace2107e4b80bb5b8902af",
   "interactions": [
     {
@@ -15,26 +15,26 @@
             "medication": "lisinopril",
             "choice": "potential_conflict",
             "probabilities": {
+              "potential_conflict": 1,
               "agreement": 0,
-              "insufficient_information": 0,
-              "potential_conflict": 1
+              "insufficient_information": 0
             },
             "confidence": 1,
             "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.",
             "sentence_note": "Plan: continue lisinopril 10 mg daily."
           }
         ],
-        "mentions_hospital_stay": 0.33,
+        "mentions_hospital_stay": 0.31,
         "documents": [
           {
             "title": "Discharge summary",
-            "date": "2026-09-23",
+            "date": "2026-09-24",
             "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
             "source": "DocumentReference/{{documentReferenceId}}"
           },
           {
             "title": "Today's visit note",
-            "date": "2026-09-30",
+            "date": "2026-10-01",
             "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Plan: continue lisinopril 10 mg daily. Recheck BP in 4 weeks.",
             "source": "ClinicalImpression/{{clinicalImpressionId}}"
           }
@@ -55,26 +55,26 @@
             "medication": "lisinopril",
             "choice": "agreement",
             "probabilities": {
-              "potential_conflict": 0,
               "insufficient_information": 0,
-              "agreement": 1
+              "agreement": 1,
+              "potential_conflict": 0
             },
             "confidence": 1,
             "sentence_outside": "Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension.",
             "sentence_note": "Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks."
           }
         ],
-        "mentions_hospital_stay": 0.66,
+        "mentions_hospital_stay": 0.68,
         "documents": [
           {
             "title": "Discharge summary",
-            "date": "2026-09-23",
+            "date": "2026-09-24",
             "text": "Outside Hospital (synthetic) discharge summary. Admitted for hypertensive urgency; blood pressure improved after medication adjustment. Discharge medications: lisinopril was increased from 10 mg to 20 mg by mouth once daily for persistent hypertension. Follow-up: see primary care in one week for a blood pressure recheck.",
             "source": "DocumentReference/{{documentReferenceId}}"
           },
           {
             "title": "Today's visit note",
-            "date": "2026-09-30",
+            "date": "2026-10-01",
             "text": "Post-discharge follow-up. BP 138/86. No dizziness. Tolerating medications. Lisinopril increased to 20 mg daily at discharge; continue 20 mg, recheck BP in 4 weeks.",
             "source": "ClinicalImpression/{{clinicalImpressionId}}"
           }

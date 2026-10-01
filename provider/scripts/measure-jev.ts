@@ -1,5 +1,6 @@
-// Measures the model on the authored dose cases and the guided-scenario notes, with exactly
-// the state and questions the Bot sends (built by the Bot's own buildRequest).
+// Measures the model on the 100-case benchmark (the guided demo's four scenario notes plus the
+// generated cases in scripts/gen-cases/) with exactly the state and questions the Bot sends,
+// built by the Bot's own buildRequest.
 //
 //   npm --prefix provider run measure                     # hosted Jev, one round
 //   npm --prefix provider run measure -- --rounds 3
@@ -10,43 +11,37 @@
 // artifacts/<backend>-run-<UTC>.jsonl and stops on the first failed or invalid response; it
 // never substitutes an authored label for a model answer.
 
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import type { ModelService } from '../bots/consistency.ts';
+import type { ModelService, SourceDocument } from '../bots/consistency.ts';
 import { buildRequest, doseResult, modelService, readSentence } from '../bots/consistency.ts';
 import scenario from '../src/data/guided-scenario.json' with { type: 'json' };
 import { REPO_ROOT } from './configure-provider.ts';
 import { readEnv } from './env-file.ts';
+import generated from './gen-cases/generated-cases.json' with { type: 'json' };
+import scenarioCases from './measure-cases.json' with { type: 'json' };
 
-const CASES_FILE = join(REPO_ROOT, 'provider', 'scripts', 'measure-cases.json');
 const REFERENCE = 'Authored synthetic reference; not clinician-validated';
-
-type Doc = { title: string; date: string; author: string; text: string };
 
 export interface MeasurementCase {
   id: string;
   expected: string;
   medication: string;
-  outside: Doc;
-  note: Doc;
+  outside: SourceDocument;
+  note: SourceDocument;
   /** Substring of the sentence a reader expects highlighted, or null when none gives a dose. */
   highlight: { outside: string | null; note: string | null };
 }
 
-export function measurementCases(file = CASES_FILE): MeasurementCase[] {
-  const data = JSON.parse(readFileSync(file, 'utf8'));
-  const authored: MeasurementCase[] = data.authored_cases.map((c: any) => ({
-    id: c.id,
-    expected: c.expected,
-    medication: c.medication,
-    outside: c.outside_document,
-    note: c.visit_note,
-    highlight: { outside: c.highlight.outside_document, note: c.highlight.visit_note },
-  }));
-  const s = data.scenario;
-  const outside: Doc = {
+/**
+ * The benchmark: the scenario notes first, as the demo sends them, then the generated cases.
+ * @returns Every case with its expected label and highlights.
+ */
+export function measurementCases(): MeasurementCase[] {
+  const s = scenarioCases.scenario;
+  const outside: SourceDocument = {
     title: 'Discharge summary',
     date: s.discharge_date,
     author: 'Outside Hospital (synthetic)',
@@ -58,9 +53,20 @@ export function measurementCases(file = CASES_FILE): MeasurementCase[] {
     medication: s.medication,
     outside,
     note: { title: "Today's visit note", date: s.visit_date, author: "this clinic's provider", text: v.note },
-    highlight: { outside: s.highlight.outside_document, note: s.highlight.visit_note[v.id] ?? null },
+    highlight: {
+      outside: s.highlight.outside_document,
+      note: s.highlight.visit_note[v.id as keyof typeof s.highlight.visit_note] ?? null,
+    },
   }));
-  return [...authored, ...variants];
+  const batch: MeasurementCase[] = generated.cases.map((c) => ({
+    id: c.id,
+    expected: c.expected,
+    medication: c.medication,
+    outside: c.outside_document,
+    note: c.visit_note,
+    highlight: { outside: c.highlight.outside_document, note: c.highlight.visit_note },
+  }));
+  return [...variants, ...batch];
 }
 
 function highlightOk(expected: string | null, picked: string | null | undefined): boolean {
@@ -165,7 +171,10 @@ export async function measure(options: MeasureOptions): Promise<number> {
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
-    options: { rounds: { type: 'string', default: '1' }, backend: { type: 'string', default: 'typesafe' } },
+    options: {
+      rounds: { type: 'string', default: '1' },
+      backend: { type: 'string', default: 'typesafe' },
+    },
   });
   const rounds = Number(values.rounds);
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 5) {

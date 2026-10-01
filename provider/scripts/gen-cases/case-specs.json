@@ -1,0 +1,869 @@
+{
+  "_about": "Structured inputs for generating more generated-cases.json entries. Each spec fixes the medication, the two doses/frequencies and the expected label per model-contract.json's criteria, but not the prose. A Sonnet subagent writes the outside_document and visit_note text from one spec, following README.md in this folder. validate-cases.test.ts checks the committed result against these specs.",
+  "specs": [
+    {
+      "id": "gen-lisinopril-increase-no-ack",
+      "medication": "lisinopril",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "The note copies the old dose forward as a routine refill; it must not mention the hospital stay, a dose change, or give any reason for the new number."
+    },
+    {
+      "id": "gen-metformin-decrease-no-ack",
+      "medication": "metformin",
+      "expected": "potential_conflict",
+      "outside": { "dose": "1000 mg", "freq": "twice daily" },
+      "note": { "dose": "500 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "A plain visit note restating a lower dose with no acknowledgment of a change."
+    },
+    {
+      "id": "gen-atenolol-frequency-no-ack",
+      "medication": "atenolol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "50 mg", "freq": "once daily" },
+      "note": { "dose": "50 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "Same dose, different frequency, stated as the current plan with no explanation."
+    },
+    {
+      "id": "gen-losartan-increase-ack",
+      "medication": "losartan",
+      "expected": "agreement",
+      "outside": { "dose": "50 mg", "freq": "once daily" },
+      "note": { "dose": "100 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly say the dose was increased at discharge (or by a specialist) and name both the old and new numbers, then state the new dose is the plan going forward."
+    },
+    {
+      "id": "gen-amlodipine-decrease-ack",
+      "medication": "amlodipine",
+      "expected": "agreement",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "5 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered, name the reason in general terms (e.g. low blood pressure, swelling), and confirm the lower dose as the plan."
+    },
+    {
+      "id": "gen-levothyroxine-equivalent-units",
+      "medication": "levothyroxine",
+      "expected": "agreement",
+      "outside": { "dose": "100 mcg", "freq": "once daily" },
+      "note": { "dose": "0.1 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "Both documents describe the SAME dose using different but equivalent units (micrograms vs. milligrams); do not add acknowledgment language, since none is needed."
+    },
+    {
+      "id": "gen-metoprolol-equivalent-tablets",
+      "medication": "metoprolol",
+      "expected": "agreement",
+      "outside": { "dose": "50 mg", "freq": "twice daily" },
+      "note": { "dose": "two 25 mg tablets", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "The outside document states a single number; the note describes the same total dose as a tablet count instead. No acknowledgment language needed."
+    },
+    {
+      "id": "gen-sertraline-abbreviation",
+      "medication": "sertraline",
+      "expected": "agreement",
+      "outside": { "dose": "100 mg", "freq": "once daily" },
+      "note": { "dose": "100 mg", "freq": "QD" },
+      "acknowledge": false,
+      "guidance": "Same dose and frequency; the note uses the clinical abbreviation QD instead of spelling out once daily."
+    },
+    {
+      "id": "gen-gabapentin-abbreviation",
+      "medication": "gabapentin",
+      "expected": "agreement",
+      "outside": { "dose": "300 mg", "freq": "three times daily" },
+      "note": { "dose": "300 mg", "freq": "TID" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses TID instead of three times daily."
+    },
+    {
+      "id": "gen-omeprazole-no-dose-in-note",
+      "medication": "omeprazole",
+      "expected": "insufficient_information",
+      "outside": { "dose": "20 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency for it."
+    },
+    {
+      "id": "gen-furosemide-not-in-outside",
+      "medication": "furosemide",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "40 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short medication list for other, unrelated drugs and must NOT mention furosemide at all. The note states a dose for it."
+    },
+    {
+      "id": "gen-warfarin-not-in-note",
+      "medication": "warfarin",
+      "expected": "insufficient_information",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note is about other topics and must NOT mention warfarin at all."
+    },
+    {
+      "id": "gen-insulin-glargine-increase-no-ack",
+      "medication": "insulin glargine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "20 units", "freq": "at bedtime" },
+      "note": { "dose": "28 units", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "A higher unit count stated as the current plan with no mention of why it changed."
+    },
+    {
+      "id": "gen-simvastatin-increase-ack",
+      "medication": "simvastatin",
+      "expected": "agreement",
+      "outside": { "dose": "20 mg", "freq": "at bedtime" },
+      "note": { "dose": "40 mg", "freq": "at bedtime" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the statin dose was increased, mention a plausible reason (e.g. a lipid panel), and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen-hctz-frequency-increase-ack",
+      "medication": "hydrochlorothiazide",
+      "expected": "agreement",
+      "outside": { "dose": "25 mg", "freq": "once daily" },
+      "note": { "dose": "25 mg", "freq": "twice daily" },
+      "acknowledge": true,
+      "guidance": "Same dose, but the note must explicitly acknowledge the frequency was increased (e.g. for blood pressure control) and confirm twice daily as the plan."
+    },
+    {
+      "id": "gen-escitalopram-increase-no-ack",
+      "medication": "escitalopram",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen-pantoprazole-held-then-resumed",
+      "medication": "pantoprazole",
+      "expected": "agreement",
+      "outside": { "dose": "40 mg", "freq": "once daily" },
+      "note": { "dose": "40 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The outside document notes the medication was held before a procedure. The note explicitly says to resume it at the same dose, which counts as acknowledging and continuing the plan."
+    },
+    {
+      "id": "gen-bupropion-dated-lists-no-ack",
+      "medication": "bupropion",
+      "expected": "potential_conflict",
+      "outside": { "dose": "150 mg", "freq": "once daily" },
+      "note": { "dose": "300 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "Write both documents as plain dated medication lists (no narrative), each stating the current dose, with nothing in either one explaining or connecting the change."
+    },
+    {
+      "id": "gen-atorvastatin-equivalent-wording",
+      "medication": "atorvastatin",
+      "expected": "agreement",
+      "outside": { "dose": "40 mg", "freq": "nightly" },
+      "note": { "dose": "40 mg", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "Same dose and timing, described with different but equivalent words (nightly vs. at bedtime). No acknowledgment language needed."
+    },
+    {
+      "id": "gen-lisinopril-increase-ack-alt-wording",
+      "medication": "lisinopril",
+      "expected": "agreement",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "Use a different patient and different wording than any other lisinopril case: the note must explicitly say the hospital raised the dose and state the new dose as the ongoing plan."
+    },
+    {
+      "id": "gen-levothyroxine-decrease-no-ack",
+      "medication": "levothyroxine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "125 mcg", "freq": "once daily" },
+      "note": { "dose": "88 mcg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A lower dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen-albuterol-frequency-tightened-no-ack",
+      "medication": "albuterol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "2 puffs", "freq": "every 4 hours as needed" },
+      "note": { "dose": "2 puffs", "freq": "every 2 hours as needed" },
+      "acknowledge": false,
+      "guidance": "Same dose per use, but a tighter as-needed interval stated as the current plan with no explanation."
+    },
+    {
+      "id": "gen-warfarin-equivalent-wording",
+      "medication": "warfarin",
+      "expected": "agreement",
+      "outside": { "dose": "5 mg", "freq": "daily" },
+      "note": { "dose": "5 mg", "freq": "once a day" },
+      "acknowledge": false,
+      "guidance": "Same dose and frequency, phrased slightly differently (daily vs. once a day). No acknowledgment language needed."
+    },
+    {
+      "id": "gen-gabapentin-not-in-outside",
+      "medication": "gabapentin",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "300 mg", "freq": "three times daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention gabapentin. The note states a dose for it."
+    },
+    {
+      "id": "gen-sertraline-decrease-ack",
+      "medication": "sertraline",
+      "expected": "agreement",
+      "outside": { "dose": "100 mg", "freq": "once daily" },
+      "note": { "dose": "50 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered (e.g. due to a side effect) and confirm the lower dose as the plan."
+    },
+    {
+      "id": "gen-amlodipine-increase-no-ack",
+      "medication": "amlodipine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A different patient than any other amlodipine case. A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen-insulin-glargine-equivalent-wording",
+      "medication": "insulin glargine",
+      "expected": "agreement",
+      "outside": { "dose": "24 units", "freq": "subcutaneously at bedtime" },
+      "note": { "dose": "24 units", "freq": "SQ nightly" },
+      "acknowledge": false,
+      "guidance": "Same unit count and timing, phrased with different clinical abbreviations (SQ vs. subcutaneously, nightly vs. at bedtime)."
+    },
+    {
+      "id": "gen-hctz-no-dose-in-note",
+      "medication": "hydrochlorothiazide",
+      "expected": "insufficient_information",
+      "outside": { "dose": "12.5 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication as before and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen-escitalopram-not-in-outside",
+      "medication": "escitalopram",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention escitalopram. The note states a dose for it."
+    },
+    {
+      "id": "gen-metoprolol-frequency-decrease-no-ack",
+      "medication": "metoprolol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "25 mg", "freq": "twice daily" },
+      "note": { "dose": "25 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A different patient than the other metoprolol case. Same dose, fewer times per day, stated as the current plan with no explanation."
+    },
+    {
+      "id": "gen2-carvedilol-increase-no-ack",
+      "medication": "carvedilol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "3.125 mg", "freq": "twice daily" },
+      "note": { "dose": "6.25 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-tamsulosin-increase-no-ack",
+      "medication": "tamsulosin",
+      "expected": "potential_conflict",
+      "outside": { "dose": "0.4 mg", "freq": "once daily" },
+      "note": { "dose": "0.8 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-duloxetine-increase-no-ack",
+      "medication": "duloxetine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "30 mg", "freq": "once daily" },
+      "note": { "dose": "60 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-venlafaxine-increase-no-ack",
+      "medication": "venlafaxine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "75 mg", "freq": "once daily" },
+      "note": { "dose": "150 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-quetiapine-increase-no-ack",
+      "medication": "quetiapine",
+      "expected": "potential_conflict",
+      "outside": { "dose": "25 mg", "freq": "at bedtime" },
+      "note": { "dose": "50 mg", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-aripiprazole-increase-no-ack",
+      "medication": "aripiprazole",
+      "expected": "potential_conflict",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-risperidone-increase-no-ack",
+      "medication": "risperidone",
+      "expected": "potential_conflict",
+      "outside": { "dose": "1 mg", "freq": "twice daily" },
+      "note": { "dose": "2 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-lithium-frequency-no-ack",
+      "medication": "lithium",
+      "expected": "potential_conflict",
+      "outside": { "dose": "300 mg", "freq": "twice daily" },
+      "note": { "dose": "300 mg", "freq": "three times daily" },
+      "acknowledge": false,
+      "guidance": "Same dose, more times per day, stated as the current plan with no explanation."
+    },
+    {
+      "id": "gen2-levetiracetam-increase-no-ack",
+      "medication": "levetiracetam",
+      "expected": "potential_conflict",
+      "outside": { "dose": "500 mg", "freq": "twice daily" },
+      "note": { "dose": "1000 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-rivaroxaban-decrease-no-ack",
+      "medication": "rivaroxaban",
+      "expected": "potential_conflict",
+      "outside": { "dose": "20 mg", "freq": "once daily" },
+      "note": { "dose": "15 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A lower dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-digoxin-increase-no-ack",
+      "medication": "digoxin",
+      "expected": "potential_conflict",
+      "outside": { "dose": "0.125 mg", "freq": "once daily" },
+      "note": { "dose": "0.25 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-spironolactone-increase-no-ack",
+      "medication": "spironolactone",
+      "expected": "potential_conflict",
+      "outside": { "dose": "25 mg", "freq": "once daily" },
+      "note": { "dose": "50 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-montelukast-frequency-no-ack",
+      "medication": "montelukast",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "Same dose, more times per day, stated as the current plan with no explanation."
+    },
+    {
+      "id": "gen2-prednisone-increase-no-ack",
+      "medication": "prednisone",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-methotrexate-increase-no-ack",
+      "medication": "methotrexate",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once weekly" },
+      "note": { "dose": "15 mg", "freq": "once weekly" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current weekly plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-glipizide-increase-no-ack",
+      "medication": "glipizide",
+      "expected": "potential_conflict",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-donepezil-increase-no-ack",
+      "medication": "donepezil",
+      "expected": "potential_conflict",
+      "outside": { "dose": "5 mg", "freq": "at bedtime" },
+      "note": { "dose": "10 mg", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-lorazepam-increase-no-ack",
+      "medication": "lorazepam",
+      "expected": "potential_conflict",
+      "outside": { "dose": "0.5 mg", "freq": "twice daily" },
+      "note": { "dose": "1 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-baclofen-increase-no-ack",
+      "medication": "baclofen",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "three times daily" },
+      "note": { "dose": "20 mg", "freq": "three times daily" },
+      "acknowledge": false,
+      "guidance": "A higher dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-tramadol-increase-no-ack",
+      "medication": "tramadol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "50 mg", "freq": "every 6 hours as needed" },
+      "note": { "dose": "100 mg", "freq": "every 6 hours as needed" },
+      "acknowledge": false,
+      "guidance": "A higher as-needed dose stated as the current plan with no acknowledgment of the change."
+    },
+    {
+      "id": "gen2-carvedilol-equivalent-wording",
+      "medication": "carvedilol",
+      "expected": "agreement",
+      "outside": { "dose": "3.125 mg", "freq": "twice daily" },
+      "note": { "dose": "3.125 mg", "freq": "BID" },
+      "acknowledge": false,
+      "guidance": "Same dose and frequency, phrased slightly differently (twice daily vs. the abbreviation BID, and milligrams spelled out vs. numeral). No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-tamsulosin-increase-ack",
+      "medication": "tamsulosin",
+      "expected": "agreement",
+      "outside": { "dose": "0.4 mg", "freq": "once daily" },
+      "note": { "dose": "0.8 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-duloxetine-decrease-ack",
+      "medication": "duloxetine",
+      "expected": "agreement",
+      "outside": { "dose": "60 mg", "freq": "once daily" },
+      "note": { "dose": "30 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered (e.g. tapered), name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-aripiprazole-abbreviation",
+      "medication": "aripiprazole",
+      "expected": "agreement",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "5 mg", "freq": "QD" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses QD instead of once daily. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-risperidone-decrease-ack",
+      "medication": "risperidone",
+      "expected": "agreement",
+      "outside": { "dose": "2 mg", "freq": "twice daily" },
+      "note": { "dose": "1 mg", "freq": "twice daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-lithium-equivalent-tablets",
+      "medication": "lithium",
+      "expected": "agreement",
+      "outside": { "dose": "300 mg", "freq": "twice daily" },
+      "note": { "dose": "two 150 mg tablets", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "The outside document states a single number; the note describes the same total dose as a tablet count instead. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-levetiracetam-increase-ack",
+      "medication": "levetiracetam",
+      "expected": "agreement",
+      "outside": { "dose": "500 mg", "freq": "twice daily" },
+      "note": { "dose": "1000 mg", "freq": "twice daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased (e.g. for better seizure control), name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-rivaroxaban-equivalent-wording",
+      "medication": "rivaroxaban",
+      "expected": "agreement",
+      "outside": { "dose": "20 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily with the evening meal" },
+      "acknowledge": false,
+      "guidance": "Same dose and frequency; the note adds a routine instruction (with the evening meal) that doesn't change the dose. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-digoxin-equivalent-units",
+      "medication": "digoxin",
+      "expected": "agreement",
+      "outside": { "dose": "125 mcg", "freq": "once daily" },
+      "note": { "dose": "0.125 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "Both documents describe the SAME dose using different but equivalent units (micrograms vs. milligrams). No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-spironolactone-increase-ack",
+      "medication": "spironolactone",
+      "expected": "agreement",
+      "outside": { "dose": "25 mg", "freq": "once daily" },
+      "note": { "dose": "50 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-montelukast-equivalent-wording",
+      "medication": "montelukast",
+      "expected": "agreement",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "nightly" },
+      "acknowledge": false,
+      "guidance": "Same dose, described with different but equivalent timing words (once daily vs. nightly). No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-prednisone-taper-ack",
+      "medication": "prednisone",
+      "expected": "agreement",
+      "outside": { "dose": "20 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered as part of a planned taper, name both old and new doses, and confirm the new dose as the current plan."
+    },
+    {
+      "id": "gen2-glipizide-abbreviation",
+      "medication": "glipizide",
+      "expected": "agreement",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "5 mg", "freq": "QD" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses QD instead of once daily. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-donepezil-increase-ack",
+      "medication": "donepezil",
+      "expected": "agreement",
+      "outside": { "dose": "5 mg", "freq": "at bedtime" },
+      "note": { "dose": "10 mg", "freq": "at bedtime" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-lorazepam-equivalent-abbreviation",
+      "medication": "lorazepam",
+      "expected": "agreement",
+      "outside": { "dose": "0.5 mg", "freq": "twice daily" },
+      "note": { "dose": "0.5 mg", "freq": "BID" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses BID instead of twice daily. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-baclofen-decrease-ack",
+      "medication": "baclofen",
+      "expected": "agreement",
+      "outside": { "dose": "20 mg", "freq": "three times daily" },
+      "note": { "dose": "10 mg", "freq": "three times daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was lowered (e.g. due to drowsiness), name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-tramadol-equivalent-wording",
+      "medication": "tramadol",
+      "expected": "agreement",
+      "outside": { "dose": "50 mg", "freq": "every 6 hours as needed" },
+      "note": { "dose": "50 mg", "freq": "Q6H PRN" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses the abbreviations Q6H PRN instead of spelling it out. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-quetiapine-increase-ack",
+      "medication": "quetiapine",
+      "expected": "agreement",
+      "outside": { "dose": "25 mg", "freq": "at bedtime" },
+      "note": { "dose": "50 mg", "freq": "at bedtime" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-venlafaxine-increase-ack",
+      "medication": "venlafaxine",
+      "expected": "agreement",
+      "outside": { "dose": "75 mg", "freq": "once daily" },
+      "note": { "dose": "150 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "The note must explicitly acknowledge the dose was increased, name both old and new doses, and confirm the new dose as the plan."
+    },
+    {
+      "id": "gen2-clonazepam-equivalent-abbreviation",
+      "medication": "clonazepam",
+      "expected": "agreement",
+      "outside": { "dose": "0.5 mg", "freq": "twice daily" },
+      "note": { "dose": "0.5 mg", "freq": "BID" },
+      "acknowledge": false,
+      "guidance": "Same dose; the note uses BID instead of twice daily. No acknowledgment language needed."
+    },
+    {
+      "id": "gen2-carvedilol-no-dose-in-note",
+      "medication": "carvedilol",
+      "expected": "insufficient_information",
+      "outside": { "dose": "3.125 mg", "freq": "twice daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-tamsulosin-not-in-outside",
+      "medication": "tamsulosin",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "0.4 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention tamsulosin. The note states a dose for it."
+    },
+    {
+      "id": "gen2-duloxetine-not-in-note",
+      "medication": "duloxetine",
+      "expected": "insufficient_information",
+      "outside": { "dose": "30 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note is about other topics and must NOT mention duloxetine at all."
+    },
+    {
+      "id": "gen2-venlafaxine-no-dose-in-note",
+      "medication": "venlafaxine",
+      "expected": "insufficient_information",
+      "outside": { "dose": "75 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-quetiapine-not-in-outside",
+      "medication": "quetiapine",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "25 mg", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention quetiapine. The note states a dose for it."
+    },
+    {
+      "id": "gen2-aripiprazole-no-dose-in-note",
+      "medication": "aripiprazole",
+      "expected": "insufficient_information",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-risperidone-not-in-note",
+      "medication": "risperidone",
+      "expected": "insufficient_information",
+      "outside": { "dose": "1 mg", "freq": "twice daily" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note is about other topics and must NOT mention risperidone at all."
+    },
+    {
+      "id": "gen2-lithium-no-dose-in-note",
+      "medication": "lithium",
+      "expected": "insufficient_information",
+      "outside": { "dose": "300 mg", "freq": "twice daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-levetiracetam-not-in-outside",
+      "medication": "levetiracetam",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "500 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention levetiracetam. The note states a dose for it."
+    },
+    {
+      "id": "gen2-rivaroxaban-no-dose-in-note",
+      "medication": "rivaroxaban",
+      "expected": "insufficient_information",
+      "outside": { "dose": "20 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-digoxin-not-in-note",
+      "medication": "digoxin",
+      "expected": "insufficient_information",
+      "outside": { "dose": "0.125 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note is about other topics and must NOT mention digoxin at all."
+    },
+    {
+      "id": "gen2-spironolactone-no-dose-in-note",
+      "medication": "spironolactone",
+      "expected": "insufficient_information",
+      "outside": { "dose": "25 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-montelukast-not-in-outside",
+      "medication": "montelukast",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention montelukast. The note states a dose for it."
+    },
+    {
+      "id": "gen2-prednisone-no-dose-in-note",
+      "medication": "prednisone",
+      "expected": "insufficient_information",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-methotrexate-not-in-note",
+      "medication": "methotrexate",
+      "expected": "insufficient_information",
+      "outside": { "dose": "10 mg", "freq": "once weekly" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a weekly dose. The note is about other topics and must NOT mention methotrexate at all."
+    },
+    {
+      "id": "gen2-glipizide-no-dose-in-note",
+      "medication": "glipizide",
+      "expected": "insufficient_information",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-donepezil-not-in-outside",
+      "medication": "donepezil",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "5 mg", "freq": "at bedtime" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention donepezil. The note states a dose for it."
+    },
+    {
+      "id": "gen2-lorazepam-no-dose-in-note",
+      "medication": "lorazepam",
+      "expected": "insufficient_information",
+      "outside": { "dose": "0.5 mg", "freq": "twice daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-baclofen-not-in-note",
+      "medication": "baclofen",
+      "expected": "insufficient_information",
+      "outside": { "dose": "10 mg", "freq": "three times daily" },
+      "note": { "dose": null, "freq": null, "mentions_medication": false },
+      "acknowledge": false,
+      "guidance": "The outside document states a dose. The note is about other topics and must NOT mention baclofen at all."
+    },
+    {
+      "id": "gen2-tramadol-no-dose-in-note",
+      "medication": "tramadol",
+      "expected": "insufficient_information",
+      "outside": { "dose": "50 mg", "freq": "every 6 hours as needed" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "The outside document states an as-needed dose. The note only says to continue the medication and must NOT state any dose or frequency."
+    },
+    {
+      "id": "gen2-clonazepam-not-in-outside",
+      "medication": "clonazepam",
+      "expected": "insufficient_information",
+      "outside": { "dose": null, "freq": null, "mentions_medication": false },
+      "note": { "dose": "0.5 mg", "freq": "twice daily" },
+      "acknowledge": false,
+      "guidance": "The outside document is a short list of other medications and must NOT mention clonazepam. The note states a dose for it."
+    },
+    {
+      "id": "dose-conflict",
+      "medication": "lisinopril",
+      "expected": "potential_conflict",
+      "outside": { "dose": "10 mg", "freq": "once daily" },
+      "note": { "dose": "20 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "Hand-written original case. Same discharge day, two different doses, no explanation."
+    },
+    {
+      "id": "dose-agreement",
+      "medication": "metformin",
+      "expected": "agreement",
+      "outside": { "dose": "500 mg", "freq": "twice daily" },
+      "note": { "dose": "500 mg", "freq": null },
+      "acknowledge": false,
+      "guidance": "Hand-written original case. The same regimen said two ways: \"twice daily\" vs. a morning and an evening dose."
+    },
+    {
+      "id": "dose-dated-change",
+      "medication": "amlodipine",
+      "expected": "agreement",
+      "outside": { "dose": "5 mg", "freq": "once daily" },
+      "note": { "dose": "10 mg", "freq": "once daily" },
+      "acknowledge": true,
+      "guidance": "Hand-written original case. The later note names the old and new dose and says the old one is superseded."
+    },
+    {
+      "id": "dose-missing",
+      "medication": "losartan",
+      "expected": "insufficient_information",
+      "outside": { "dose": "50 mg", "freq": "once daily" },
+      "note": { "dose": null, "freq": null },
+      "acknowledge": false,
+      "guidance": "Hand-written original case. The note continues the medication and says the dose is not recorded."
+    },
+    {
+      "id": "dose-dates-unexplained",
+      "medication": "atenolol",
+      "expected": "potential_conflict",
+      "outside": { "dose": "25 mg", "freq": "once daily" },
+      "note": { "dose": "50 mg", "freq": "once daily" },
+      "acknowledge": false,
+      "guidance": "Hand-written original case. Two dated lists with different doses and no explanation. First labeled insufficient_information; relabeled potential_conflict on October 1, 2026 to follow the contract criteria (different current doses without acknowledgment)."
+    }
+  ]
+}

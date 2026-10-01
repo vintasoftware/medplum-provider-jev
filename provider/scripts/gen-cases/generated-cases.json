@@ -1,0 +1,1919 @@
+{
+  "_about": "Generated from case-specs.json by Sonnet subagents, one case per spec, plus the five original hand-written cases (ids `dose-*`, specs added after the fact). `expected` is an authored synthetic reference, not clinician-validated; see README.md to regenerate or extend. Validate with validate-cases.ts before merging further edits.",
+  "cases": [
+    {
+      "id": "gen-lisinopril-increase-no-ack",
+      "medication": "lisinopril",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E. Current discharge prescription: lisinopril 10 mg by mouth once daily."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E. Current medications: lisinopril 20 mg by mouth once daily. Continue refill as prescribed."
+      },
+      "highlight": {
+        "outside_document": "lisinopril 10 mg by mouth once daily",
+        "visit_note": "lisinopril 20 mg by mouth once daily"
+      }
+    },
+    {
+      "id": "gen-metformin-decrease-no-ack",
+      "medication": "metformin",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E. Metformin: 1000 mg by mouth twice daily."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E. Metformin 500 mg by mouth twice daily."
+      },
+      "highlight": {
+        "outside_document": "1000 mg",
+        "visit_note": "500 mg"
+      }
+    },
+    {
+      "id": "gen-atenolol-frequency-no-ack",
+      "medication": "atenolol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient E",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E is discharged on atenolol 50 mg once daily for blood pressure control. Continue this regimen as outpatient."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient E",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E is maintained on atenolol 50 mg twice daily. Blood pressure well controlled on current regimen."
+      },
+      "highlight": {
+        "outside_document": "atenolol 50 mg once daily",
+        "visit_note": "atenolol 50 mg twice daily"
+      }
+    },
+    {
+      "id": "gen-losartan-increase-ack",
+      "medication": "losartan",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient E",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E was discharged on losartan 50 mg once daily for blood pressure control; continue as prescribed."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient E",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Losartan was increased at discharge from 50 mg to 100 mg once daily; the 100 mg once daily dose is the ongoing plan."
+      },
+      "highlight": {
+        "outside_document": "losartan 50 mg once daily",
+        "visit_note": "increased at discharge from 50 mg to 100 mg once daily"
+      }
+    },
+    {
+      "id": "gen-amlodipine-decrease-ack",
+      "medication": "amlodipine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient E",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medications include amlodipine 10 mg once daily for blood pressure control. Continue as prescribed until follow-up."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient E",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Amlodipine was lowered from 10 mg to 5 mg once daily due to swelling in the lower legs. Plan is to continue amlodipine 5 mg once daily and monitor."
+      },
+      "highlight": {
+        "outside_document": "amlodipine 10 mg once daily",
+        "visit_note": "continue amlodipine 5 mg once daily"
+      }
+    },
+    {
+      "id": "gen-levothyroxine-equivalent-units",
+      "medication": "levothyroxine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Medication List",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J was discharged on levothyroxine 100 mcg once daily for continued management of hypothyroidism. Continue this regimen as part of the ongoing treatment plan."
+      },
+      "visit_note": {
+        "title": "Visit Note - Current Medications",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient J remains on levothyroxine 0.1 mg once daily. Thyroid function to be reassessed at next follow-up visit."
+      },
+      "highlight": {
+        "outside_document": "levothyroxine 100 mcg once daily",
+        "visit_note": "levothyroxine 0.1 mg once daily"
+      }
+    },
+    {
+      "id": "gen-metoprolol-equivalent-tablets",
+      "medication": "metoprolol",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient E",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E is discharged on metoprolol 50 mg twice daily as part of the current medication plan."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient E",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E reports taking metoprolol as two 25 mg tablets twice daily."
+      },
+      "highlight": {
+        "outside_document": "metoprolol 50 mg twice daily",
+        "visit_note": "two 25 mg tablets twice daily"
+      }
+    },
+    {
+      "id": "gen-sertraline-abbreviation",
+      "medication": "sertraline",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E is discharged on sertraline 100 mg once daily as part of the current medication plan."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E continues sertraline 100 mg QD."
+      },
+      "highlight": {
+        "outside_document": "sertraline 100 mg once daily",
+        "visit_note": "sertraline 100 mg QD"
+      }
+    },
+    {
+      "id": "gen-gabapentin-abbreviation",
+      "medication": "gabapentin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Medications",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E: Discharge plan includes gabapentin 300 mg three times daily for neuropathic pain control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Current Medications",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E is taking gabapentin 300 mg TID."
+      },
+      "highlight": {
+        "outside_document": "gabapentin 300 mg three times daily",
+        "visit_note": "gabapentin 300 mg TID"
+      }
+    },
+    {
+      "id": "gen-omeprazole-no-dose-in-note",
+      "medication": "omeprazole",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient E",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: continue omeprazole 20 mg once daily for gastric reflux management."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient E",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue omeprazole as previously directed."
+      },
+      "highlight": {
+        "outside_document": "omeprazole 20 mg once daily",
+        "visit_note": null
+      }
+    },
+    {
+      "id": "gen-furosemide-not-in-outside",
+      "medication": "furosemide",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Synthetic patient K - Medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Current medications: aspirin 81 mg daily and vitamin D 1000 IU daily. No other changes reported."
+      },
+      "visit_note": {
+        "title": "Synthetic patient K - Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Plan: continue furosemide 40 mg once daily for fluid management."
+      },
+      "highlight": {
+        "outside_document": null,
+        "visit_note": "furosemide 40 mg once daily"
+      }
+    },
+    {
+      "id": "gen-warfarin-not-in-note",
+      "medication": "warfarin",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient F is discharged on warfarin 5 mg once daily for anticoagulation; follow up with primary care as scheduled."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient F reports mild knee stiffness after walking. Plan: continue home exercises and recheck at next visit if symptoms persist."
+      },
+      "highlight": {
+        "outside_document": "warfarin 5 mg once daily",
+        "visit_note": null
+      }
+    },
+    {
+      "id": "gen-insulin-glargine-increase-no-ack",
+      "medication": "insulin glargine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: insulin glargine 20 units at bedtime for glycemic control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications include insulin glargine 28 units at bedtime."
+      },
+      "highlight": {
+        "outside_document": "insulin glargine 20 units at bedtime",
+        "visit_note": "insulin glargine 28 units at bedtime"
+      }
+    },
+    {
+      "id": "gen-simvastatin-increase-ack",
+      "medication": "simvastatin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medications include simvastatin 20 mg at bedtime, continued from prior regimen."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Lipid panel showed elevated LDL, so simvastatin was increased from 20 mg to 40 mg at bedtime. Plan is to continue simvastatin 40 mg at bedtime and recheck lipids at follow-up."
+      },
+      "highlight": {
+        "outside_document": "simvastatin 20 mg at bedtime",
+        "visit_note": "continue simvastatin 40 mg at bedtime"
+      }
+    },
+    {
+      "id": "gen-hctz-frequency-increase-ack",
+      "medication": "hydrochlorothiazide",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medications include hydrochlorothiazide 25 mg once daily for blood pressure control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Hydrochlorothiazide frequency increased from once daily to twice daily for better blood pressure control; plan is 25 mg twice daily going forward."
+      },
+      "highlight": {
+        "outside_document": "25 mg once daily",
+        "visit_note": "increased from once daily to twice daily"
+      }
+    },
+    {
+      "id": "gen-escitalopram-increase-no-ack",
+      "medication": "escitalopram",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medications include escitalopram 10 mg once daily for continued management of depressive symptoms."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications: escitalopram 20 mg once daily. Patient tolerating regimen well, no new complaints."
+      },
+      "highlight": {
+        "outside_document": "escitalopram 10 mg once daily",
+        "visit_note": "escitalopram 20 mg once daily"
+      }
+    },
+    {
+      "id": "gen-pantoprazole-held-then-resumed",
+      "medication": "pantoprazole",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic Patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Home medications include pantoprazole 40 mg once daily, which was held prior to the endoscopic procedure per routine pre-procedure instructions."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic Patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Procedure is complete with no complications. Resume pantoprazole 40 mg once daily starting now that the procedure has concluded."
+      },
+      "highlight": {
+        "outside_document": "pantoprazole 40 mg once daily",
+        "visit_note": "pantoprazole 40 mg once daily"
+      }
+    },
+    {
+      "id": "gen-bupropion-dated-lists-no-ack",
+      "medication": "bupropion",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Synthetic patient F - External medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Current medications: bupropion 150 mg, once daily."
+      },
+      "visit_note": {
+        "title": "Synthetic patient F - Visit medication list",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications: bupropion 300 mg, once daily."
+      },
+      "highlight": {
+        "outside_document": "bupropion 150 mg",
+        "visit_note": "bupropion 300 mg"
+      }
+    },
+    {
+      "id": "gen-atorvastatin-equivalent-wording",
+      "medication": "atorvastatin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary — Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: continue atorvastatin 40 mg nightly for lipid management. Patient tolerated the regimen well with no reported adverse effects."
+      },
+      "visit_note": {
+        "title": "Visit Note — Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications: atorvastatin 40 mg at bedtime, continuing current regimen for lipid control."
+      },
+      "highlight": {
+        "outside_document": "atorvastatin 40 mg nightly",
+        "visit_note": "atorvastatin 40 mg at bedtime"
+      }
+    },
+    {
+      "id": "gen-lisinopril-increase-ack-alt-wording",
+      "medication": "lisinopril",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient P",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient P. Discharge medications include lisinopril 10 mg once daily for blood pressure control."
+      },
+      "visit_note": {
+        "title": "Follow-up Visit Note - Synthetic patient P",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient P was discharged on lisinopril 10 mg daily, but the hospital increased this before discharge due to elevated readings. Continue lisinopril 20 mg once daily going forward."
+      },
+      "highlight": {
+        "outside_document": "lisinopril 10 mg once daily",
+        "visit_note": "Continue lisinopril 20 mg once daily"
+      }
+    },
+    {
+      "id": "gen-levothyroxine-decrease-no-ack",
+      "medication": "levothyroxine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: levothyroxine 125 mcg once daily. Continue as prescribed and follow up with primary care."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications include levothyroxine 88 mcg once daily. Patient tolerating regimen well, no new concerns."
+      },
+      "highlight": {
+        "outside_document": "levothyroxine 125 mcg once daily",
+        "visit_note": "levothyroxine 88 mcg once daily"
+      }
+    },
+    {
+      "id": "gen-warfarin-equivalent-wording",
+      "medication": "warfarin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L. Discharge medications include warfarin 5 mg daily for anticoagulation. Continue home dosing as directed."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient L reports taking warfarin 5 mg once a day. No bleeding or bruising noted. Continue current regimen."
+      },
+      "highlight": {
+        "outside_document": "warfarin 5 mg daily",
+        "visit_note": "warfarin 5 mg once a day"
+      }
+    },
+    {
+      "id": "gen-gabapentin-not-in-outside",
+      "medication": "gabapentin",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication List - Synthetic patient V",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Current medications: lisinopril 10 mg daily and metformin 500 mg twice daily. No other changes noted."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient V",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Plan: continue gabapentin 300 mg three times daily for nerve pain management."
+      },
+      "highlight": {
+        "outside_document": null,
+        "visit_note": "gabapentin 300 mg three times daily"
+      }
+    },
+    {
+      "id": "gen-sertraline-decrease-ack",
+      "medication": "sertraline",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient Q",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medications include sertraline 100 mg once daily for depression. Patient tolerated therapy well during admission."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient Q",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Sertraline was lowered from 100 mg to 50 mg once daily after the patient reported nausea. Plan: continue sertraline 50 mg once daily and reassess at next visit."
+      },
+      "highlight": {
+        "outside_document": "100 mg once daily",
+        "visit_note": "continue sertraline 50 mg once daily"
+      }
+    },
+    {
+      "id": "gen-amlodipine-increase-no-ack",
+      "medication": "amlodipine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L: discharge plan includes amlodipine 5 mg once daily for blood pressure control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient L is currently taking amlodipine 10 mg once daily."
+      },
+      "highlight": {
+        "outside_document": "amlodipine 5 mg once daily",
+        "visit_note": "amlodipine 10 mg once daily"
+      }
+    },
+    {
+      "id": "gen-insulin-glargine-equivalent-wording",
+      "medication": "insulin glargine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Endocrine",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: Synthetic patient L to continue insulin glargine 24 units subcutaneously at bedtime for glycemic control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Endocrinology",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current regimen: insulin glargine 24 units SQ nightly. Patient tolerating well."
+      },
+      "highlight": {
+        "outside_document": "insulin glargine 24 units subcutaneously at bedtime",
+        "visit_note": "insulin glargine 24 units SQ nightly"
+      }
+    },
+    {
+      "id": "gen-hctz-no-dose-in-note",
+      "medication": "hydrochlorothiazide",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient Z is discharged on hydrochlorothiazide 12.5 mg once daily for blood pressure control."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue hydrochlorothiazide as before; no other changes to the medication regimen."
+      },
+      "highlight": {
+        "outside_document": "hydrochlorothiazide 12.5 mg once daily",
+        "visit_note": null
+      }
+    },
+    {
+      "id": "gen-escitalopram-not-in-outside",
+      "medication": "escitalopram",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication List (Synthetic patient L)",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L. Current medications: metformin 500 mg twice daily and lisinopril 10 mg once daily. No other prescriptions noted."
+      },
+      "visit_note": {
+        "title": "Visit Note (Synthetic patient L)",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient L will continue escitalopram 10 mg once daily as the current plan."
+      },
+      "highlight": {
+        "outside_document": null,
+        "visit_note": "escitalopram 10 mg once daily"
+      }
+    },
+    {
+      "id": "gen-metoprolol-frequency-decrease-no-ack",
+      "medication": "metoprolol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic Patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge medication plan: continue metoprolol 25 mg twice daily for rate control. Patient tolerated the regimen well prior to discharge."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic Patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current medications: metoprolol 25 mg once daily. Vitals stable; continue current regimen."
+      },
+      "highlight": {
+        "outside_document": "metoprolol 25 mg twice daily",
+        "visit_note": "metoprolol 25 mg once daily"
+      }
+    },
+    {
+      "id": "gen-albuterol-frequency-tightened-no-ack",
+      "medication": "albuterol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Plan - Respiratory",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Discharge plan: albuterol 2 puffs every 4 hours as needed for wheezing or shortness of breath. Synthetic patient W."
+      },
+      "visit_note": {
+        "title": "Visit Note - Respiratory",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current plan: albuterol 2 puffs every 2 hours as needed for shortness of breath. Synthetic patient W."
+      },
+      "highlight": {
+        "outside_document": "2 puffs every 4 hours as needed",
+        "visit_note": "2 puffs every 2 hours as needed"
+      }
+    },
+    {
+      "id": "gen2-prednisone-increase-no-ack",
+      "medication": "prednisone",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient B is discharged on prednisone 10 mg once daily for management of inflammatory symptoms."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient B is currently on prednisone 20 mg once daily."
+      },
+      "highlight": { "outside_document": "prednisone 10 mg once daily", "visit_note": "prednisone 20 mg once daily" }
+    },
+    {
+      "id": "gen2-methotrexate-increase-no-ack",
+      "medication": "methotrexate",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient C is discharged on methotrexate 10 mg once weekly for rheumatoid arthritis control."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient C's current regimen includes methotrexate 15 mg once weekly."
+      },
+      "highlight": {
+        "outside_document": "methotrexate 10 mg once weekly",
+        "visit_note": "methotrexate 15 mg once weekly"
+      }
+    },
+    {
+      "id": "gen2-glipizide-increase-no-ack",
+      "medication": "glipizide",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient D is discharged on glipizide 5 mg once daily for glycemic control."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient D is maintained on glipizide 10 mg once daily."
+      },
+      "highlight": { "outside_document": "glipizide 5 mg once daily", "visit_note": "glipizide 10 mg once daily" }
+    },
+    {
+      "id": "gen2-donepezil-increase-no-ack",
+      "medication": "donepezil",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient E is discharged on donepezil 5 mg at bedtime for cognitive support."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient E's current medication list shows donepezil 10 mg at bedtime."
+      },
+      "highlight": { "outside_document": "donepezil 5 mg at bedtime", "visit_note": "donepezil 10 mg at bedtime" }
+    },
+    {
+      "id": "gen2-lorazepam-increase-no-ack",
+      "medication": "lorazepam",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient G is discharged on lorazepam 0.5 mg twice daily for anxiety symptoms."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient G is currently prescribed lorazepam 1 mg twice daily."
+      },
+      "highlight": { "outside_document": "lorazepam 0.5 mg twice daily", "visit_note": "lorazepam 1 mg twice daily" }
+    },
+    {
+      "id": "gen2-baclofen-increase-no-ack",
+      "medication": "baclofen",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J is discharged on baclofen 10 mg three times daily for muscle spasticity."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient J's current plan lists baclofen 20 mg three times daily."
+      },
+      "highlight": {
+        "outside_document": "baclofen 10 mg three times daily",
+        "visit_note": "baclofen 20 mg three times daily"
+      }
+    },
+    {
+      "id": "gen2-tramadol-increase-no-ack",
+      "medication": "tramadol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient K is discharged on tramadol 50 mg every 6 hours as needed for pain control."
+      },
+      "visit_note": {
+        "title": "Visit Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient K is currently taking tramadol 100 mg every 6 hours as needed."
+      },
+      "highlight": {
+        "outside_document": "tramadol 50 mg every 6 hours as needed",
+        "visit_note": "tramadol 100 mg every 6 hours as needed"
+      }
+    },
+    {
+      "id": "gen2-carvedilol-equivalent-wording",
+      "medication": "carvedilol",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient J",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J was discharged on carvedilol 3.125 mg twice daily for heart failure management. Vitals stable at discharge."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient J",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient J reports good tolerance of carvedilol 3.125 mg BID. No dizziness or fatigue noted."
+      },
+      "highlight": {
+        "outside_document": "carvedilol 3.125 mg twice daily",
+        "visit_note": "carvedilol 3.125 mg BID"
+      }
+    },
+    {
+      "id": "gen2-tamsulosin-increase-ack",
+      "medication": "tamsulosin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient K",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient K was discharged on tamsulosin 0.4 mg once daily for urinary retention symptoms."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient K",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient K continues to have urinary hesitancy on tamsulosin 0.4 mg once daily. Plan: increase tamsulosin to 0.8 mg once daily for better symptom control."
+      },
+      "highlight": {
+        "outside_document": "tamsulosin 0.4 mg once daily",
+        "visit_note": "increase tamsulosin to 0.8 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-duloxetine-decrease-ack",
+      "medication": "duloxetine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L was discharged on duloxetine 60 mg once daily for neuropathic pain."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient L reports nausea on duloxetine 60 mg once daily. Plan: taper duloxetine down to 30 mg once daily to reduce side effects."
+      },
+      "highlight": {
+        "outside_document": "duloxetine 60 mg once daily",
+        "visit_note": "taper duloxetine down to 30 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-aripiprazole-abbreviation",
+      "medication": "aripiprazole",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient M",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient M was discharged on aripiprazole 5 mg once daily for mood stabilization."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient M",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient M remains stable on aripiprazole 5 mg QD with no reported side effects."
+      },
+      "highlight": {
+        "outside_document": "aripiprazole 5 mg once daily",
+        "visit_note": "aripiprazole 5 mg QD"
+      }
+    },
+    {
+      "id": "gen2-risperidone-decrease-ack",
+      "medication": "risperidone",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient N",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient N was discharged on risperidone 2 mg twice daily for behavioral symptoms."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient N",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient N reports mild sedation on risperidone 2 mg twice daily. Plan: decrease risperidone to 1 mg twice daily to minimize sedation."
+      },
+      "highlight": {
+        "outside_document": "risperidone 2 mg twice daily",
+        "visit_note": "decrease risperidone to 1 mg twice daily"
+      }
+    },
+    {
+      "id": "gen2-lithium-equivalent-tablets",
+      "medication": "lithium",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient O",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient O was discharged on lithium 300 mg twice daily for mood stabilization."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient O",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient O continues lithium, taking two 150 mg tablets twice daily. Levels remain within therapeutic range."
+      },
+      "highlight": {
+        "outside_document": "lithium 300 mg twice daily",
+        "visit_note": "two 150 mg tablets twice daily"
+      }
+    },
+    {
+      "id": "gen2-glipizide-abbreviation",
+      "medication": "glipizide",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient F was discharged on glipizide 5 mg once daily for glucose control. Follow up with primary care for routine monitoring."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient F continues glipizide 5 mg QD. Blood glucose logs reviewed and stable."
+      },
+      "highlight": { "outside_document": "glipizide 5 mg once daily", "visit_note": "glipizide 5 mg QD" }
+    },
+    {
+      "id": "gen2-donepezil-increase-ack",
+      "medication": "donepezil",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient G",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient G was discharged on donepezil 5 mg at bedtime for cognitive symptoms. Neurology follow-up advised."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient G",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient G's donepezil was increased from 5 mg at bedtime to 10 mg at bedtime due to limited symptom response. Plan is to continue donepezil 10 mg at bedtime."
+      },
+      "highlight": { "outside_document": "donepezil 5 mg at bedtime", "visit_note": "donepezil 10 mg at bedtime" }
+    },
+    {
+      "id": "gen2-lorazepam-equivalent-abbreviation",
+      "medication": "lorazepam",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient H",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient H was discharged on lorazepam 0.5 mg twice daily for anxiety symptoms. Continue outpatient monitoring."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient H",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient H remains on lorazepam 0.5 mg BID with good symptom control reported."
+      },
+      "highlight": { "outside_document": "lorazepam 0.5 mg twice daily", "visit_note": "lorazepam 0.5 mg BID" }
+    },
+    {
+      "id": "gen2-baclofen-decrease-ack",
+      "medication": "baclofen",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient I",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient I was discharged on baclofen 20 mg three times daily for muscle spasticity. Monitor for side effects."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient I",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Due to reported drowsiness, baclofen was decreased from 20 mg three times daily to 10 mg three times daily. Plan is to continue baclofen 10 mg three times daily and reassess."
+      },
+      "highlight": {
+        "outside_document": "baclofen 20 mg three times daily",
+        "visit_note": "baclofen 10 mg three times daily"
+      }
+    },
+    {
+      "id": "gen2-tramadol-equivalent-wording",
+      "medication": "tramadol",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient J",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J was discharged on tramadol 50 mg every 6 hours as needed for pain. Continue conservative pain management."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient J",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient J reports occasional use of tramadol 50 mg Q6H PRN with adequate pain relief."
+      },
+      "highlight": {
+        "outside_document": "tramadol 50 mg every 6 hours as needed",
+        "visit_note": "tramadol 50 mg Q6H PRN"
+      }
+    },
+    {
+      "id": "gen2-quetiapine-increase-ack",
+      "medication": "quetiapine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient K",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient K was discharged on quetiapine 25 mg at bedtime for sleep and mood symptoms. Follow up as scheduled."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient K",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Quetiapine was increased from 25 mg at bedtime to 50 mg at bedtime for persistent symptoms. Plan is to continue quetiapine 50 mg at bedtime."
+      },
+      "highlight": { "outside_document": "quetiapine 25 mg at bedtime", "visit_note": "quetiapine 50 mg at bedtime" }
+    },
+    {
+      "id": "gen2-venlafaxine-increase-ack",
+      "medication": "venlafaxine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L was discharged on venlafaxine 75 mg once daily for depressive symptoms. Outpatient psychiatry follow-up recommended."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Venlafaxine was increased from 75 mg once daily to 150 mg once daily given partial response. Plan is to continue venlafaxine 150 mg once daily."
+      },
+      "highlight": {
+        "outside_document": "venlafaxine 75 mg once daily",
+        "visit_note": "venlafaxine 150 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-clonazepam-equivalent-abbreviation",
+      "medication": "clonazepam",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge summary - Synthetic patient M",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient M was discharged on clonazepam 0.5 mg twice daily for seizure prophylaxis. Continue outpatient neurology care."
+      },
+      "visit_note": {
+        "title": "Visit note - Synthetic patient M",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient M continues clonazepam 0.5 mg BID without breakthrough seizures."
+      },
+      "highlight": {
+        "outside_document": "clonazepam 0.5 mg twice daily",
+        "visit_note": "clonazepam 0.5 mg BID"
+      }
+    },
+    {
+      "id": "gen2-carvedilol-no-dose-in-note",
+      "medication": "carvedilol",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient G is discharged on carvedilol 3.125 mg twice daily for heart failure."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue carvedilol as previously prescribed."
+      },
+      "highlight": { "outside_document": "carvedilol 3.125 mg twice daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-tamsulosin-not-in-outside",
+      "medication": "tamsulosin",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient H takes metformin 500 mg twice daily and lisinopril 10 mg once daily."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue tamsulosin 0.4 mg once daily for urinary symptoms."
+      },
+      "highlight": { "outside_document": null, "visit_note": "tamsulosin 0.4 mg once daily" }
+    },
+    {
+      "id": "gen2-duloxetine-not-in-note",
+      "medication": "duloxetine",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient I is discharged on duloxetine 30 mg once daily for neuropathic pain."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient reports improved sleep and no new falls since last visit."
+      },
+      "highlight": { "outside_document": "duloxetine 30 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-venlafaxine-no-dose-in-note",
+      "medication": "venlafaxine",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J is discharged on venlafaxine 75 mg once daily for depression."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue venlafaxine as tolerated."
+      },
+      "highlight": { "outside_document": "venlafaxine 75 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-quetiapine-not-in-outside",
+      "medication": "quetiapine",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient K takes atorvastatin 20 mg once daily and amlodipine 5 mg once daily."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue quetiapine 25 mg at bedtime for sleep."
+      },
+      "highlight": { "outside_document": null, "visit_note": "quetiapine 25 mg at bedtime" }
+    },
+    {
+      "id": "gen2-aripiprazole-no-dose-in-note",
+      "medication": "aripiprazole",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L is discharged on aripiprazole 5 mg once daily for mood stabilization."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue aripiprazole without changes."
+      },
+      "highlight": { "outside_document": "aripiprazole 5 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-risperidone-not-in-note",
+      "medication": "risperidone",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient M is discharged on risperidone 1 mg twice daily for behavioral symptoms."
+      },
+      "visit_note": {
+        "title": "Follow-up Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient appears calm and is tolerating meals well."
+      },
+      "highlight": { "outside_document": "risperidone 1 mg twice daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-lithium-no-dose-in-note",
+      "medication": "lithium",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient Q is discharged on the home regimen. Continue lithium 300 mg twice daily. Follow up with psychiatry in two weeks for level check."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue lithium as previously prescribed."
+      },
+      "highlight": { "outside_document": "lithium 300 mg twice daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-levetiracetam-not-in-outside",
+      "medication": "levetiracetam",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient R takes amlodipine 5 mg once daily and atorvastatin 20 mg once daily for chronic conditions."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current plan includes levetiracetam 500 mg twice daily for seizure control."
+      },
+      "highlight": { "outside_document": null, "visit_note": "levetiracetam 500 mg twice daily" }
+    },
+    {
+      "id": "gen2-rivaroxaban-no-dose-in-note",
+      "medication": "rivaroxaban",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient S is discharged home. Continue rivaroxaban 20 mg once daily for anticoagulation. Avoid NSAIDs while on this therapy."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue rivaroxaban as prescribed at discharge."
+      },
+      "highlight": { "outside_document": "rivaroxaban 20 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-digoxin-not-in-note",
+      "medication": "digoxin",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient T is discharged on the prior regimen. Continue digoxin 0.125 mg once daily for rate control."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient reports improved energy and tolerates the current diet well. No new complaints at this visit."
+      },
+      "highlight": { "outside_document": "digoxin 0.125 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-spironolactone-no-dose-in-note",
+      "medication": "spironolactone",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient U is discharged home. Continue spironolactone 25 mg once daily for heart failure management."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue spironolactone per the prior regimen."
+      },
+      "highlight": { "outside_document": "spironolactone 25 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-montelukast-not-in-outside",
+      "medication": "montelukast",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient V takes metformin 500 mg twice daily and lisinopril 10 mg once daily for chronic conditions."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Current plan includes montelukast 10 mg once daily for asthma control."
+      },
+      "highlight": { "outside_document": null, "visit_note": "montelukast 10 mg once daily" }
+    },
+    {
+      "id": "gen2-prednisone-no-dose-in-note",
+      "medication": "prednisone",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge summary",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient W is discharged home. Continue prednisone 10 mg once daily as a taper for the inflammatory flare."
+      },
+      "visit_note": {
+        "title": "Visit note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Continue prednisone per the discharge taper schedule."
+      },
+      "highlight": { "outside_document": "prednisone 10 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-methotrexate-not-in-note",
+      "medication": "methotrexate",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Plan",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient Q is discharged on methotrexate 10 mg once weekly for rheumatoid arthritis. Follow up with rheumatology as scheduled."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient Q reports improved joint mobility and denies new symptoms. Vital signs are stable."
+      },
+      "highlight": { "outside_document": "methotrexate 10 mg once weekly", "visit_note": null }
+    },
+    {
+      "id": "gen2-glipizide-no-dose-in-note",
+      "medication": "glipizide",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Plan",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient R is discharged on glipizide 5 mg once daily for type 2 diabetes management."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient R should continue glipizide as previously prescribed."
+      },
+      "highlight": { "outside_document": "glipizide 5 mg once daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-donepezil-not-in-outside",
+      "medication": "donepezil",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication List",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient S continues lisinopril 10 mg daily and atorvastatin 20 mg daily for hypertension and hyperlipidemia."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient S is continued on donepezil 5 mg at bedtime for cognitive support."
+      },
+      "highlight": { "outside_document": null, "visit_note": "donepezil 5 mg at bedtime" }
+    },
+    {
+      "id": "gen2-lorazepam-no-dose-in-note",
+      "medication": "lorazepam",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Plan",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient T is discharged on lorazepam 0.5 mg twice daily for anxiety symptoms."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient T should continue taking lorazepam as directed."
+      },
+      "highlight": { "outside_document": "lorazepam 0.5 mg twice daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-baclofen-not-in-note",
+      "medication": "baclofen",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Plan",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient U is discharged on baclofen 10 mg three times daily for muscle spasticity."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient U reports stable mood and good appetite. Sleep pattern remains unchanged."
+      },
+      "highlight": { "outside_document": "baclofen 10 mg three times daily", "visit_note": null }
+    },
+    {
+      "id": "gen2-tramadol-no-dose-in-note",
+      "medication": "tramadol",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Discharge Plan",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient V is discharged on tramadol 50 mg every 6 hours as needed for pain control."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient V can continue tramadol for ongoing pain management."
+      },
+      "highlight": { "outside_document": "tramadol 50 mg every 6 hours as needed", "visit_note": null }
+    },
+    {
+      "id": "gen2-clonazepam-not-in-outside",
+      "medication": "clonazepam",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication List",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient W continues metformin 500 mg twice daily and omeprazole 20 mg daily for chronic conditions."
+      },
+      "visit_note": {
+        "title": "Clinic Note",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient W is continued on clonazepam 0.5 mg twice daily for seizure prophylaxis."
+      },
+      "highlight": { "outside_document": null, "visit_note": "clonazepam 0.5 mg twice daily" }
+    },
+    {
+      "id": "gen2-levetiracetam-increase-ack",
+      "medication": "levetiracetam",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient Q",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient Q discharged on levetiracetam 500 mg twice daily for seizure control, stable at discharge."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient Q",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Levetiracetam increased from 500 mg to 1000 mg twice daily for better seizure control. Continue at 1000 mg twice daily."
+      },
+      "highlight": { "outside_document": "levetiracetam 500 mg twice daily", "visit_note": "Continue at 1000 mg twice daily" }
+    },
+    {
+      "id": "gen2-rivaroxaban-equivalent-wording",
+      "medication": "rivaroxaban",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient R",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient R discharged on rivaroxaban 20 mg once daily for anticoagulation."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient R",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient continues rivaroxaban 20 mg once daily with the evening meal, tolerating well."
+      },
+      "highlight": {
+        "outside_document": "rivaroxaban 20 mg once daily",
+        "visit_note": "rivaroxaban 20 mg once daily with the evening meal"
+      }
+    },
+    {
+      "id": "gen2-digoxin-equivalent-units",
+      "medication": "digoxin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient S",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient S discharged on digoxin 125 mcg once daily for rate control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient S",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient remains on digoxin 0.125 mg once daily, no adverse effects noted."
+      },
+      "highlight": { "outside_document": "digoxin 125 mcg once daily", "visit_note": "digoxin 0.125 mg once daily" }
+    },
+    {
+      "id": "gen2-spironolactone-increase-ack",
+      "medication": "spironolactone",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient T",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient T discharged on spironolactone 25 mg once daily for fluid management."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient T",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Spironolactone increased from 25 mg once daily to 50 mg once daily due to persistent edema. Continue at 50 mg once daily."
+      },
+      "highlight": { "outside_document": "spironolactone 25 mg once daily", "visit_note": "Continue at 50 mg once daily" }
+    },
+    {
+      "id": "gen2-montelukast-equivalent-wording",
+      "medication": "montelukast",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient U",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient U discharged on montelukast 10 mg once daily for asthma control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient U",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Patient continues montelukast 10 mg nightly, asthma symptoms well controlled."
+      },
+      "highlight": { "outside_document": "montelukast 10 mg once daily", "visit_note": "montelukast 10 mg nightly" }
+    },
+    {
+      "id": "gen2-prednisone-taper-ack",
+      "medication": "prednisone",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient V",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient V discharged on prednisone 20 mg once daily for inflammatory flare."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient V",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Prednisone lowered from 20 mg once daily to 10 mg once daily as part of planned taper. Continue at 10 mg once daily."
+      },
+      "highlight": { "outside_document": "prednisone 20 mg once daily", "visit_note": "Continue at 10 mg once daily" }
+    },
+    {
+      "id": "gen2-lithium-frequency-no-ack",
+      "medication": "lithium",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient Q",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient Q is discharged on lithium 300 mg twice daily for maintenance treatment. Renal function was stable prior to discharge."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient Q",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient Q continues lithium 300 mg three times daily. Mood symptoms remain controlled on this regimen."
+      },
+      "highlight": {
+        "outside_document": "lithium 300 mg twice daily",
+        "visit_note": "lithium 300 mg three times daily"
+      }
+    },
+    {
+      "id": "gen2-levetiracetam-increase-no-ack",
+      "medication": "levetiracetam",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient R",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient R is discharged on levetiracetam 500 mg twice daily for seizure prophylaxis. No seizure activity noted during admission."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient R",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient R takes levetiracetam 1000 mg twice daily for seizure control. Patient reports no breakthrough seizures."
+      },
+      "highlight": {
+        "outside_document": "levetiracetam 500 mg twice daily",
+        "visit_note": "levetiracetam 1000 mg twice daily"
+      }
+    },
+    {
+      "id": "gen2-rivaroxaban-decrease-no-ack",
+      "medication": "rivaroxaban",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient S",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient S is discharged on rivaroxaban 20 mg once daily for anticoagulation following venous thromboembolism."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient S",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient S remains on rivaroxaban 15 mg once daily for ongoing anticoagulation. No bleeding events reported."
+      },
+      "highlight": {
+        "outside_document": "rivaroxaban 20 mg once daily",
+        "visit_note": "rivaroxaban 15 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-digoxin-increase-no-ack",
+      "medication": "digoxin",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient T",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient T is discharged on digoxin 0.125 mg once daily for rate control in atrial fibrillation."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient T",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient T is maintained on digoxin 0.25 mg once daily for atrial fibrillation rate control. Heart rate is well controlled."
+      },
+      "highlight": {
+        "outside_document": "digoxin 0.125 mg once daily",
+        "visit_note": "digoxin 0.25 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-spironolactone-increase-no-ack",
+      "medication": "spironolactone",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient U",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient U is discharged on spironolactone 25 mg once daily for heart failure management."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient U",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient U continues spironolactone 50 mg once daily for heart failure. Potassium levels are within normal range."
+      },
+      "highlight": {
+        "outside_document": "spironolactone 25 mg once daily",
+        "visit_note": "spironolactone 50 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-montelukast-frequency-no-ack",
+      "medication": "montelukast",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient V",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient V is discharged on montelukast 10 mg once daily for asthma control."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient V",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient V is taking montelukast 10 mg twice daily for asthma symptom management. Breathing symptoms are improved."
+      },
+      "highlight": {
+        "outside_document": "montelukast 10 mg once daily",
+        "visit_note": "montelukast 10 mg twice daily"
+      }
+    },
+    {
+      "id": "gen2-carvedilol-increase-no-ack",
+      "medication": "carvedilol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient F",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient F was discharged on carvedilol 3.125 mg twice daily for heart failure management, with close monitoring of heart rate and blood pressure advised."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient F",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient F reports tolerating carvedilol 6.25 mg twice daily well, with no dizziness or fatigue. Blood pressure and heart rate remain stable on this regimen."
+      },
+      "highlight": {
+        "outside_document": "carvedilol 3.125 mg twice daily",
+        "visit_note": "carvedilol 6.25 mg twice daily"
+      }
+    },
+    {
+      "id": "gen2-tamsulosin-increase-no-ack",
+      "medication": "tamsulosin",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient G",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient G was discharged with instructions to continue tamsulosin 0.4 mg once daily for urinary retention symptoms, along with routine follow-up labs."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient G",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient G continues tamsulosin 0.8 mg once daily with improved urinary stream and no reported lightheadedness. Prostate symptoms remain well controlled."
+      },
+      "highlight": {
+        "outside_document": "tamsulosin 0.4 mg once daily",
+        "visit_note": "tamsulosin 0.8 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-duloxetine-increase-no-ack",
+      "medication": "duloxetine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient H",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient H was discharged on duloxetine 30 mg once daily for management of depressive symptoms, with outpatient psychiatry follow-up recommended."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient H",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient H reports improved mood on duloxetine 60 mg once daily, denying any gastrointestinal upset. Sleep and appetite remain within normal limits."
+      },
+      "highlight": {
+        "outside_document": "duloxetine 30 mg once daily",
+        "visit_note": "duloxetine 60 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-venlafaxine-increase-no-ack",
+      "medication": "venlafaxine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient I",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient I was discharged on venlafaxine 75 mg once daily for anxiety and mood symptoms, with instructions to follow up with primary care."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient I",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient I takes venlafaxine 150 mg once daily and reports reduced anxiety with stable energy levels. No adverse effects noted on exam."
+      },
+      "highlight": {
+        "outside_document": "venlafaxine 75 mg once daily",
+        "visit_note": "venlafaxine 150 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-quetiapine-increase-no-ack",
+      "medication": "quetiapine",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient J",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient J was discharged on quetiapine 25 mg at bedtime for sleep and mood stabilization, with recommendation for close psychiatric follow-up."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient J",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient J reports restful sleep on quetiapine 50 mg at bedtime, with no morning grogginess. Mood appears stable throughout the day."
+      },
+      "highlight": {
+        "outside_document": "quetiapine 25 mg at bedtime",
+        "visit_note": "quetiapine 50 mg at bedtime"
+      }
+    },
+    {
+      "id": "gen2-aripiprazole-increase-no-ack",
+      "medication": "aripiprazole",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient K",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient K was discharged on aripiprazole 5 mg once daily as an adjunct for mood disorder, with outpatient mental health follow-up advised."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient K",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient K continues aripiprazole 10 mg once daily with stable mood and no reported restlessness. Appetite and sleep remain unchanged."
+      },
+      "highlight": {
+        "outside_document": "aripiprazole 5 mg once daily",
+        "visit_note": "aripiprazole 10 mg once daily"
+      }
+    },
+    {
+      "id": "gen2-risperidone-increase-no-ack",
+      "medication": "risperidone",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge Summary - Synthetic patient L",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient L was discharged on risperidone 1 mg twice daily for psychotic symptom control, with close outpatient psychiatric monitoring planned."
+      },
+      "visit_note": {
+        "title": "Visit Note - Synthetic patient L",
+        "date": "2026-08-08",
+        "author": "synthetic",
+        "text": "Synthetic patient L reports stable symptoms on risperidone 2 mg twice daily, with no tremor or stiffness noted. Appetite and mood remain steady."
+      },
+      "highlight": {
+        "outside_document": "risperidone 1 mg twice daily",
+        "visit_note": "risperidone 2 mg twice daily"
+      }
+    },
+    {
+      "id": "dose-conflict",
+      "medication": "lisinopril",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Discharge medication list",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient A. Current discharge prescription: lisinopril 10 mg by mouth once daily."
+      },
+      "visit_note": {
+        "title": "Discharge instructions",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient A. Take lisinopril 20 mg by mouth once daily after this discharge."
+      },
+      "highlight": {
+        "outside_document": "lisinopril 10 mg",
+        "visit_note": "lisinopril 20 mg"
+      }
+    },
+    {
+      "id": "dose-agreement",
+      "medication": "metformin",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Medication list",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient B. Metformin: one 500 mg tablet by mouth twice daily."
+      },
+      "visit_note": {
+        "title": "Visit summary",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient B. Metformin 500 mg orally in the morning and 500 mg in the evening."
+      },
+      "highlight": {
+        "outside_document": "one 500 mg tablet",
+        "visit_note": "Metformin 500 mg"
+      }
+    },
+    {
+      "id": "dose-dated-change",
+      "medication": "amlodipine",
+      "expected": "agreement",
+      "outside_document": {
+        "title": "Earlier medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient C. Amlodipine 5 mg once daily."
+      },
+      "visit_note": {
+        "title": "Follow-up medication plan",
+        "date": "2026-08-15",
+        "author": "synthetic",
+        "text": "Synthetic patient C. Increase amlodipine from 5 mg once daily to 10 mg once daily starting with this visit; the old 5 mg dose is superseded."
+      },
+      "highlight": {
+        "outside_document": "Amlodipine 5 mg",
+        "visit_note": "Increase amlodipine"
+      }
+    },
+    {
+      "id": "dose-missing",
+      "medication": "losartan",
+      "expected": "insufficient_information",
+      "outside_document": {
+        "title": "Medication list",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient D. Losartan 50 mg once daily."
+      },
+      "visit_note": {
+        "title": "Transfer note",
+        "date": "2026-08-12",
+        "author": "synthetic",
+        "text": "Synthetic patient D. Continue losartan. Dose and frequency are not recorded in this note."
+      },
+      "highlight": {
+        "outside_document": "Losartan 50 mg",
+        "visit_note": null
+      }
+    },
+    {
+      "id": "dose-dates-unexplained",
+      "medication": "atenolol",
+      "expected": "potential_conflict",
+      "outside_document": {
+        "title": "Earlier medication list",
+        "date": "2026-08-01",
+        "author": "synthetic",
+        "text": "Synthetic patient I. Atenolol 25 mg once daily."
+      },
+      "visit_note": {
+        "title": "Later medication list",
+        "date": "2026-08-20",
+        "author": "synthetic",
+        "text": "Synthetic patient I. Atenolol 50 mg once daily. No treatment-change history or explanation accompanies this list."
+      },
+      "highlight": {
+        "outside_document": "Atenolol 25 mg",
+        "visit_note": "Atenolol 50 mg"
+      }
+    }
+  ]
+}
