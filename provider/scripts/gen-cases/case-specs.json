@@ -1,5 +1,5 @@
 {
-  "_about": "Structured inputs for generating more measure-cases.json entries. Each spec fixes the medication, the two doses/frequencies and the expected label per model-contract.json's criteria, but not the prose. A Sonnet subagent writes the outside_document and visit_note text from one spec, following README.md in this folder. Run validate-cases.ts on the result before merging into generated-cases.json.",
+  "_about": "Structured inputs for generating more generated-cases.json entries. Each spec fixes the medication, the two doses/frequencies and the expected label per model-contract.json's criteria, but not the prose. A Sonnet subagent writes the outside_document and visit_note text from one spec, following README.md in this folder. validate-cases.test.ts checks the committed result against these specs.",
   "specs": [
     {
       "id": "gen-lisinopril-increase-no-ack",

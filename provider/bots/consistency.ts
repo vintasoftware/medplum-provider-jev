@@ -21,9 +21,11 @@ import { noteSearch, splitSentences } from '../src/utils/consistency-review.ts';
 const DISCHARGE_SUMMARY_TYPE = 'http://loinc.org|18842-5';
 const ID_PATTERN = /^[A-Za-z0-9.-]{1,64}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+/** Jebadiah's server refuses a choice with more than 20 criteria: the sentences plus `none`. */
+export const MODAL_MAX_SENTENCES = 19;
 const { limits, labels } = contract;
 
-type SourceDocument = { title: string; date: string; author: string; text: string };
+export type SourceDocument = { title: string; date: string; author: string; text: string };
 type Question = { type: 'choice' | 'noul'; instructions: string; criteria?: Record<string, string> };
 
 /** A problem the card shows as-is. Never include document text or secrets in the message. */
@@ -276,6 +278,20 @@ function checkDocument(doc: SourceDocument): SourceDocument {
   return { ...doc, title: cleanText(doc.title).slice(0, limits.title_max), text };
 }
 
+/**
+ * The two documents as the model receives them, or a thrown reason they cannot be compared.
+ * @param outside - The outside document.
+ * @param note - The visit note.
+ * @returns Both documents, cleaned and within the contract's limits.
+ */
+export function checkDocuments(outside: SourceDocument, note: SourceDocument): [SourceDocument, SourceDocument] {
+  const checked: [SourceDocument, SourceDocument] = [checkDocument(outside), checkDocument(note)];
+  if (checked[0].text.length + checked[1].text.length > limits.total_text_max) {
+    throw new Unavailable('The note is too long for the demo check');
+  }
+  return checked;
+}
+
 async function attachmentText(medplum: MedplumClient, doc: DocumentReference, signal: AbortSignal): Promise<string> {
   const attachment = doc.content?.[0]?.attachment;
   if (!attachment?.contentType?.startsWith('text/plain')) {
@@ -352,21 +368,20 @@ async function readChart(
     throw new Unavailable('No outside discharge summary is on file');
   }
 
-  const outside = checkDocument({
-    title: summary.description ?? summary.type?.text ?? 'Discharge summary',
-    date: summary.date?.slice(0, 10) ?? '',
-    author: summary.author?.[0]?.display ?? 'outside organization',
-    text: await attachmentText(medplum, summary, signal),
-  });
-  const note = checkDocument({
-    title: "Today's visit note",
-    date: (encounter.period?.start ?? impression.date ?? impression.meta?.lastUpdated ?? '').slice(0, 10),
-    author: "this clinic's provider",
-    text: noteText,
-  });
-  if (outside.text.length + note.text.length > limits.total_text_max) {
-    throw new Unavailable('The note is too long for the demo check');
-  }
+  const [outside, note] = checkDocuments(
+    {
+      title: summary.description ?? summary.type?.text ?? 'Discharge summary',
+      date: summary.date?.slice(0, 10) ?? '',
+      author: summary.author?.[0]?.display ?? 'outside organization',
+      text: await attachmentText(medplum, summary, signal),
+    },
+    {
+      title: "Today's visit note",
+      date: (encounter.period?.start ?? impression.date ?? impression.meta?.lastUpdated ?? '').slice(0, 10),
+      author: "this clinic's provider",
+      text: noteText,
+    }
+  );
   return {
     medications,
     outside,
@@ -468,8 +483,7 @@ export function modelService(setting: (name: string) => string | undefined): Mod
       headers: { 'Modal-Key': key, 'Modal-Secret': secret },
       timeoutMs: 8000,
       messages: MODAL_MESSAGES,
-      // Jebadiah's server refuses a choice with more than 20 criteria.
-      maxSentences: 19,
+      maxSentences: MODAL_MAX_SENTENCES,
     };
   }
   throw new Unavailable('Project secret CONSISTENCY_BACKEND must be typesafe or modal');
@@ -551,10 +565,10 @@ export function readSentence(answer: any, text: string): string | null | undefin
 /**
  * Medication `i`'s result from the model's answers.
  *
- * The no-dose rule: the self-hosted models (Jebadiah, AutoJev) labeled a note with no dose
- * `agreement` while their own highlight question found no dose sentence. The dose criteria say a missing
- * dose is insufficient information, so the Bot trusts the highlight answer over an `agreement`
- * label. It never downgrades `potential_conflict`. Hosted Jev labels that note correctly itself.
+ * The no-dose rule: models sometimes label a note with no dose `agreement` while their own
+ * highlight question finds no dose sentence in it. The dose criteria say a missing dose is
+ * insufficient information, so the Bot trusts the highlight answer over an `agreement` label. It
+ * never downgrades `potential_conflict`. SELF-HOSTING.md step 7 has how often each model needs it.
  * @param answers - All answers of the model response.
  * @param i - The medication's index in the request.
  * @param medication - The medication's name.

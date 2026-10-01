@@ -1,14 +1,15 @@
 # Generated measure cases
 
-A larger, regenerable benchmark for `npm --prefix provider run measure:generated`, separate
-from `measure-cases.json` (which stays scoped to the guided demo's four scenario notes, so the
-plain `measure` checks the exact notes the demo sends).
+The regenerable part of the benchmark that `npm --prefix provider run measure` runs: 91 cases
+written by Sonnet subagents from structured specs, plus the five original hand-written cases
+(`dose-*`). The other four inputs are the guided demo's scenario notes, whose expected answers
+live in `../measure-cases.json`.
 
 - `case-specs.json` — structured specs (medication, doses, acknowledgment flag, expected label),
   no prose.
-- `generated-cases.json` — the cases written from those specs, in `measure-cases.json`'s shape.
-- `validate-cases.ts` (+ `.test.ts`) — checks a generated-cases file against the model contract's
-  limits and the specs it came from. Run: `npm --prefix provider run validate:generated-cases`.
+- `generated-cases.json` — the cases, one per spec.
+- `validate-cases.ts` (+ `.test.ts`) — checks the committed cases with the Bot's own document
+  rules and against their specs; the test suite runs it.
 
 **Runs cited by the documents** live in `../../../benchmark-runs/`.
 

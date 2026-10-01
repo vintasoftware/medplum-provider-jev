@@ -61,28 +61,16 @@ function outFile(): string {
 }
 
 describe('measure-jev', () => {
-  test('covers every scenario variant', () => {
+  test('runs the scenario notes first, then every generated case, each once', () => {
     const ids = measurementCases().map((c) => c.id);
-    expect(ids).toEqual([
+    expect(ids.slice(0, 4)).toEqual([
       'scenario-shortcut-from-chart',
       'scenario-resolved-after-edit',
       'scenario-no-dose',
       'scenario-unexplained-40mg',
     ]);
-    for (const c of measurementCases()) {
-      for (const [field, expected] of [
-        ['outside', c.highlight.outside],
-        ['note', c.highlight.note],
-      ] as const) {
-        if (expected) {
-          const text = field === 'outside' ? c.outside.text : c.note.text;
-          expect(
-            splitSentences(text).some((s) => s.includes(expected)),
-            `${c.id} ${field}`
-          ).toBe(true);
-        }
-      }
-    }
+    expect(ids).toHaveLength(100);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   test('sends the Bot request, scores labels and highlights, and never logs the key', async () => {

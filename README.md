@@ -94,8 +94,7 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Unit tests (the whole app, about a minute) | `npm --prefix provider test` |
 | Lint with Medplum's ESLint config | `npm --prefix provider run lint` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
-| Measure hosted Jev on the guided demo's scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
-| Measure hosted Jev on the larger generated benchmark (96 cases; 100 with the scenario notes) | `npm --prefix provider run measure:generated`; see `provider/scripts/gen-cases/README.md` |
+| Measure hosted Jev on the 100-case benchmark | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
 | Bot artifact smoke test | `npm --prefix provider run test:bot-bundle` |
 | Production build | `npm --prefix provider run build` |
 
@@ -108,7 +107,7 @@ Edit the JSON directly; the Bot, the app and the measurement all read it:
 | `provider/src/data/model-contract.json` | Model, labels, text limits and the question wording the Bot sends to Jev |
 | `provider/src/data/guided-scenario.json` | The synthetic discharge summary, prior note and side-path notes |
 | `provider/scripts/measure-cases.json` | Expected labels and highlights for the guided demo's own scenario notes, so `measure` checks what the demo sends |
-| `provider/scripts/gen-cases/` | The larger generated benchmark: specs, generated cases and how to extend them |
+| `provider/scripts/gen-cases/` | The 96 generated benchmark cases, their specs and how to extend them |
 | `benchmark-runs/` | The measurement runs the article cites, one JSON line per case and round |
 
 Then run `npm --prefix provider run measure`, redeploy with `npm --prefix provider run deploy:bot`, and re-record the e2e answers (below). `measure` needs `TYPESAFE_API_KEY` in the root `.env` and writes `artifacts/typesafe-run-<UTC>.jsonl` with each label, the probabilities and whether the highlights hit the expected sentences. The runs behind the article's numbers are committed in [`benchmark-runs/`](benchmark-runs/README.md).

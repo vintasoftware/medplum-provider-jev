@@ -502,7 +502,7 @@
       },
       "highlight": {
         "outside_document": "100 mg once daily",
-        "visit_note": "50 mg once daily"
+        "visit_note": "continue sertraline 50 mg once daily"
       }
     },
     {
@@ -1442,7 +1442,7 @@
         "author": "synthetic",
         "text": "Levetiracetam increased from 500 mg to 1000 mg twice daily for better seizure control. Continue at 1000 mg twice daily."
       },
-      "highlight": { "outside_document": "levetiracetam 500 mg twice daily", "visit_note": "1000 mg twice daily" }
+      "highlight": { "outside_document": "levetiracetam 500 mg twice daily", "visit_note": "Continue at 1000 mg twice daily" }
     },
     {
       "id": "gen2-rivaroxaban-equivalent-wording",
@@ -1499,7 +1499,7 @@
         "author": "synthetic",
         "text": "Spironolactone increased from 25 mg once daily to 50 mg once daily due to persistent edema. Continue at 50 mg once daily."
       },
-      "highlight": { "outside_document": "spironolactone 25 mg once daily", "visit_note": "50 mg once daily" }
+      "highlight": { "outside_document": "spironolactone 25 mg once daily", "visit_note": "Continue at 50 mg once daily" }
     },
     {
       "id": "gen2-montelukast-equivalent-wording",
@@ -1535,7 +1535,7 @@
         "author": "synthetic",
         "text": "Prednisone lowered from 20 mg once daily to 10 mg once daily as part of planned taper. Continue at 10 mg once daily."
       },
-      "highlight": { "outside_document": "prednisone 20 mg once daily", "visit_note": "10 mg once daily" }
+      "highlight": { "outside_document": "prednisone 20 mg once daily", "visit_note": "Continue at 10 mg once daily" }
     },
     {
       "id": "gen2-lithium-frequency-no-ack",
