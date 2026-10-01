@@ -94,7 +94,8 @@ Options: `--dry-run`, `--email <address>`, `--profile <name>` (a named CLI login
 | Unit tests (the whole app, about a minute) | `npm --prefix provider test` |
 | Lint with Medplum's ESLint config | `npm --prefix provider run lint` |
 | End-to-end tests (replaying recorded Jev answers) | `npm --prefix provider run test:e2e` |
-| Measure hosted Jev on the authored cases and scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
+| Measure hosted Jev on the guided demo's scenario notes | `npm --prefix provider run measure` (add `-- --backend modal` for the self-hosted model) |
+| Measure hosted Jev on the larger generated benchmark (~90 cases) | `npm --prefix provider run measure:generated`; see `provider/scripts/gen-cases/README.md` |
 | Bot artifact smoke test | `npm --prefix provider run test:bot-bundle` |
 | Production build | `npm --prefix provider run build` |
 
@@ -106,7 +107,8 @@ Edit the JSON directly; the Bot, the app and the measurement all read it:
 | --- | --- |
 | `provider/src/data/model-contract.json` | Model, labels, text limits and the question wording the Bot sends to Jev |
 | `provider/src/data/guided-scenario.json` | The synthetic discharge summary, prior note and side-path notes |
-| `provider/scripts/measure-cases.json` | Measurement inputs with the expected label and highlight for each |
+| `provider/scripts/measure-cases.json` | The guided demo's scenario notes, needed for the e2e cassette replay |
+| `provider/scripts/gen-cases/` | The larger generated benchmark: specs, generated cases and how to extend them |
 
 Then run `npm --prefix provider run measure`, redeploy with `npm --prefix provider run deploy:bot`, and re-record the e2e answers (below). `measure` needs `TYPESAFE_API_KEY` in the root `.env` and writes `artifacts/typesafe-run-<UTC>.jsonl` with each label, the probabilities and whether the highlights hit the expected sentences.
 

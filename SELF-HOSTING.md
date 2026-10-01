@@ -66,12 +66,13 @@ Never put them in frontend settings or logs; `npm --prefix provider run configur
 ## 4. Measure
 
 ```bash
-npm --prefix provider run measure -- --backend modal
+npm --prefix provider run measure -- --backend modal                                          # the demo's 4 scenario notes
+npm --prefix provider run measure -- --backend modal --cases scripts/gen-cases/generated-cases.json  # the ~90-case benchmark
 ```
 
-It sends the Bot's exact requests for the five authored dose cases and the four scenario notes, and writes `artifacts/modal-run-<UTC>.jsonl` with each label, the scores, the highlighted sentences and whether they hit the expected ones. It stops at the first 503: warm the Server first ([step 6](#6-cold-starts-and-warm-up)).
+It sends the Bot's exact requests and writes `artifacts/modal-run-<UTC>.jsonl` with each label, the scores, the highlighted sentences and whether they hit the expected ones. It stops at the first 503: warm the Server first ([step 6](#6-cold-starts-and-warm-up)).
 
-**Result.** On September 30, 2026, on the A100 (`artifacts/modal-run-20260930T145319Z.jsonl`), all 18 highlights hit the expected sentence and, with the [answer rule](#7-answer-rules), 8 of 9 labels matched the authored reference, as many as hosted Jev. Warm requests took 0.5–0.7 s. The eight guided-demo e2e tests, recorded through the real Bot against this Server, all passed. One round on authored synthetic cases, not a clinical evaluation.
+**Result (pending a refresh).** On September 30, 2026, on the A100 (`artifacts/modal-run-20260930T145319Z.jsonl`), all 18 highlights hit the expected sentence and, with the [answer rule](#7-answer-rules), 8 of 9 labels matched the authored reference, as many as hosted Jev. Warm requests took 0.5–0.7 s. The eight guided-demo e2e tests, recorded through the real Bot against this Server, all passed. This ran on the original nine-case set, before the larger generated benchmark (see [ARTICLE.md](ARTICLE.md#how-good-is-jev-what-the-tests-tell-us)); a Modal run against that benchmark is the next step.
 
 ## 5. Run the guided demo on it
 
@@ -98,9 +99,7 @@ until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Modal-Key: $CONSISTENCY_MO
 
 ## 7. Answer rules
 
-When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: hosted Jev gets that case right itself, and on September 30, 2026 the rule changed none of its nine answers (`artifacts/typesafe-run-20260930T144803Z.jsonl`).
-
-The remaining miss is `dose-dates-unexplained`: two dated doses with no explanation, which the reference calls insufficient information and Jebadiah flags as `potential_conflict` (0.94).
+When the model labels a medication `agreement` but its own highlight question found no dose sentence in one document, the Bot reports `insufficient_information` (`doseResult` in `provider/bots/consistency.ts`). It never downgrades `potential_conflict`. Jebadiah labeled "Plan: continue lisinopril." `agreement` while answering `none` for the highlight. The rule applies to both backends: on the October 1, 2026 hosted-Jev run against the generated benchmark (`artifacts/typesafe-run-20261001T194952Z.jsonl`), it fired on several "no dose in this document" cases, always correcting an `agreement` guess to `insufficient_information` and never changing a `potential_conflict` answer. A self-hosted run against that same benchmark is pending.
 
 ## 8. Cost
 

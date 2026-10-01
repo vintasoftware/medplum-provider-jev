@@ -284,17 +284,18 @@
   <div style="position:absolute;left:0;right:0;top:504px;text-align:center;font-size:22px;font-weight:600;color:var(--body)">The model never changes the chart.</div>
 </figure>
 
-<!-- 7. Hosted Jev on nine synthetic inputs. -->
+<!-- 7. Hosted Jev on the 95-case benchmark (4 scenario notes + 91 generated cases). -->
 <figure id="results" style="height:690px">
   <div style="position:absolute;left:60px;top:60px;width:300px">
-    <div class="eyebrow">Hosted Jev · Sep 24, 2026</div>
-    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:18px;line-height:1">8<span style="color:var(--muted);font-size:56px"> / 9</span></div>
+    <div class="eyebrow">Hosted Jev · Oct 1, 2026</div>
+    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:18px;line-height:1">92<span style="color:var(--muted);font-size:56px"> / 95</span></div>
     <div style="font-size:21px;color:var(--body);margin-top:6px">labels match the expected answer</div>
-    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:40px;line-height:1">18<span style="color:var(--muted);font-size:56px"> / 18</span></div>
+    <div style="font-size:92px;font-weight:800;letter-spacing:-0.04em;margin-top:40px;line-height:1">189<span style="color:var(--muted);font-size:56px"> / 190</span></div>
     <div style="font-size:21px;color:var(--body);margin-top:6px">highlights on the right sentence</div>
-    <div style="font-size:16px;color:var(--muted);margin-top:40px;line-height:1.5">Model <span class="mono">jev-1.13.0</span>. Synthetic text, author's labels. Integration evidence, not a clinical benchmark.</div>
+    <div style="font-size:16px;color:var(--muted);margin-top:40px;line-height:1.5">Model <span class="mono">jev-1.13.0</span>. Synthetic text, authored labels. Integration evidence, not a clinical benchmark.</div>
   </div>
   <div class="card" style="position:absolute;left:390px;top:50px;width:760px;padding:18px 26px 12px">
+    <div style="font-size:14px;color:var(--muted);padding-bottom:4px">The 3 label misses out of 95, all acknowledged dose changes</div>
     <div style="display:grid;grid-template-columns:1fr 200px 110px 34px;gap:14px;align-items:center;padding:8px 0 12px;border-bottom:1px solid var(--line)" class="eyebrow">
       <span style="font-size:13px">Input</span><span style="font-size:13px">Jev's answer</span><span style="font-size:13px">p</span><span></span>
     </div>
@@ -335,22 +336,17 @@
 </figure>
 
 <script>
-// Measured on September 24, 2026 (npm --prefix provider run measure); see ARTICLE.md.
+// Measured on October 1, 2026 (npm --prefix provider run measure:generated, plus the 4
+// scenario notes from `measure`); see ARTICLE.md. Shows only the 3 label misses out of 95.
 const LABEL = {
   potential_conflict: ['conflict', 'Potential conflict'],
   agreement: ['agree', 'Agreement'],
   insufficient_information: ['unknown', 'Insufficient information'],
 };
 const RESULTS = [
-  ['Same discharge, 10 mg vs 20 mg', 'potential_conflict', 'potential_conflict', 1.00],
-  ['Same dose, different wording', 'agreement', 'agreement', 1.00],
-  ['Explicit dated change', 'agreement', 'agreement', 0.96],
-  ['Dose missing in one document', 'insufficient_information', 'insufficient_information', 0.99],
-  ['Dated lists, unexplained change', 'insufficient_information', 'potential_conflict', 1.00],
-  ['Scenario: plan copied from the chart', 'potential_conflict', 'potential_conflict', 1.00],
-  ['Scenario: note acknowledges the change', 'agreement', 'agreement', 1.00],
-  ['Scenario: no dose', 'insufficient_information', 'insufficient_information', 0.88],
-  ['Scenario: unexplained 40 mg', 'potential_conflict', 'potential_conflict', 0.80],
+  ['Losartan 50→100 mg, explained at discharge', 'agreement', 'potential_conflict', 0.83],
+  ['Amlodipine 10→5 mg, explained (swelling)', 'agreement', 'potential_conflict', 0.72],
+  ['Sertraline 100→50 mg, explained (side effect)', 'agreement', 'potential_conflict', 0.57],
 ];
 const COLOR = { conflict: 'var(--conflict)', agree: 'var(--agree)', unknown: 'var(--unknown)' };
 document.getElementById('rows').innerHTML = RESULTS.map(([name, expected, got, p]) => {

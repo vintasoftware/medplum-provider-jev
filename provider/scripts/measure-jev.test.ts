@@ -61,14 +61,9 @@ function outFile(): string {
 }
 
 describe('measure-jev', () => {
-  test('covers the authored dose cases and every scenario variant', () => {
+  test('covers every scenario variant', () => {
     const ids = measurementCases().map((c) => c.id);
     expect(ids).toEqual([
-      'dose-conflict',
-      'dose-agreement',
-      'dose-dated-change',
-      'dose-missing',
-      'dose-dates-unexplained',
       'scenario-shortcut-from-chart',
       'scenario-resolved-after-edit',
       'scenario-no-dose',
@@ -115,8 +110,8 @@ describe('measure-jev', () => {
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l));
-    expect(rows[0]).toMatchObject({ case_id: 'dose-conflict', matches_reference: false });
-    expect(rows[1]).toMatchObject({ case_id: 'dose-agreement', matches_reference: true });
+    expect(rows[0]).toMatchObject({ case_id: 'scenario-shortcut-from-chart', matches_reference: false });
+    expect(rows[1]).toMatchObject({ case_id: 'scenario-resolved-after-edit', matches_reference: true });
     expect(rows[1].result.highlight.note_ok).toBe(true);
     expect(rows[1].result.highlight.outside_ok).toBe(false);
     expect(readFileSync(file, 'utf8') + log.join('\n')).not.toContain('ts-secret');

@@ -1,10 +1,15 @@
-// Measures the model on the authored dose cases and the guided-scenario notes, with exactly
-// the state and questions the Bot sends (built by the Bot's own buildRequest).
+// Measures the model on the guided-scenario notes, or on a larger generated case batch, with
+// exactly the state and questions the Bot sends (built by the Bot's own buildRequest).
 //
-//   npm --prefix provider run measure                     # hosted Jev, one round
+//   npm --prefix provider run measure           # hosted Jev, the demo's 4 scenario notes, one round
+//   npm --prefix provider run measure:generated # hosted Jev, the ~90-case generated benchmark
 //   npm --prefix provider run measure -- --rounds 3
 //   npm --prefix provider run measure -- --backend modal  # the self-hosted model on the private Modal Server
 //   npm --prefix provider run measure -- --cases scripts/gen-cases/generated-cases.json
+//
+// The generated batch (scripts/gen-cases/, see its README.md or the regenerate-measure-cases
+// skill to add more) is the benchmark; the scenario notes above stay here because the guided
+// demo's e2e cassettes replay them.
 //
 // Hosted Jev needs TYPESAFE_API_KEY; Modal needs CONSISTENCY_MODEL_URL, CONSISTENCY_MODAL_KEY
 // and CONSISTENCY_MODAL_SECRET, in the environment or the root .env. Writes
@@ -38,9 +43,9 @@ export interface MeasurementCase {
 
 export function measurementCases(file = CASES_FILE): MeasurementCase[] {
   const data = JSON.parse(readFileSync(file, 'utf8'));
-  // The default file's hand-picked pairs are `authored_cases`; a generated batch (see
-  // scripts/gen-cases/) uses `cases` instead and has no `scenario` to append.
-  const authored: MeasurementCase[] = (data.authored_cases ?? data.cases ?? []).map((c: any) => ({
+  // A generated batch (see scripts/gen-cases/) uses `cases`; legacy files used `authored_cases`.
+  // Neither has a `scenario` to append.
+  const authored: MeasurementCase[] = (data.cases ?? data.authored_cases ?? []).map((c: any) => ({
     id: c.id,
     expected: c.expected,
     medication: c.medication,
