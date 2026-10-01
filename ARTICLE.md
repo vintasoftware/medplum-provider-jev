@@ -88,7 +88,7 @@ Both label misses are notes that name the old dose, the new dose and the reason 
 
 That result makes acknowledgment phrasing part of the work still to evaluate. These are synthetic inputs generated from structured specs, not clinician-reviewed cases; they show how the model responds to our questions, not clinical accuracy. A clinical evaluation needs clinician-reviewed labels and must treat false agreements, which miss a dose error, differently from false conflicts, which cost the provider a review. Therefore, the displayed scores are a distribution over the available answers, not a measure of clinical correctness.
 
-The highlights showed how much a small wording change can matter. Our first question asked for the sentence stating the *current* dose. For "increase lisinopril to 40 mg daily", Jev consistently chose `none`, with probabilities from 0.83 to 0.89 over five identical calls. The wording appears to have excluded a proposed change from what counted as current. We tried four versions on the nine inputs we had at the time:
+The highlights showed how much a small wording change can matter. Our first question asked for the sentence stating the *current* dose. For "increase lisinopril to 40 mg daily", Jev consistently chose `none`, with probabilities from 0.83 to 0.89 over five identical calls. The wording appears to have excluded a proposed change from what counted as current. We tried four versions on nine inputs:
 
 ![Correct highlights out of 18 per wording: "the current dose" 17, "going forward, including a new or changed dose" 16, "the dose as the plan, whether continued, new or changed" 18 (used by the Bot), "a dose" 18.](article/images/highlight-wording.png)
 
@@ -105,7 +105,7 @@ To explore running an open-weights model in our own [Modal](https://modal.com/) 
 | Jebadiah 9B v2 | not listed | | | 82 of 100 | 197 of 200 |
 | Hosted Jev, for comparison | reference | 0.841 | | 98 of 100 | 199 of 200 |
 
-The self-hosted labels include one answer rule. The open models sometimes label a note with no dose `agreement` while their own highlight question finds no dose sentence, so the Bot reports that case as insufficient information; it never changes a `potential_conflict` answer. The rule fired on 11 of the 100 cases for Jebadiah 27B and once for hosted Jev.
+The Bot applies one rule on top of the model's label. When a model labels a medication `agreement` but its own highlight answer finds no sentence stating a dose in one of the documents, the Bot reports `insufficient_information` instead, since a missing dose cannot be an agreement; it never changes a `potential_conflict`. The counts above include that rule. It fired on 11 of the 100 cases for Jebadiah 27B and once for hosted Jev.
 
 The top performing one was Jebadiah 27B, and its calibration error is the lowest among the top entries, which matters because the card shows the probabilities. All eight of its misses are acknowledged dose changes it called `potential_conflict` at 0.51 to 0.63. The benchmark has 19 such cases; hosted Jev missed 2 of them and AutoJev-27B 16, despite ranking higher on the index and on clinical-trial statements (NLI4CT). The index's top entry, Surogate Rune, answers through its own serving engine and decision API rather than the `/v1/systemone` request the Bot sends, and has a calibration error of 0.12, therefore it wasn't tested.
 
