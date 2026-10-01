@@ -17,7 +17,9 @@
     "setup": "node scripts/setup-medplum.ts",
     "configure": "node scripts/configure-provider.ts",
     "test:e2e": "playwright test",
-    "measure": "node scripts/measure-jev.ts"
+    "measure": "node scripts/measure-jev.ts",
+    "measure:generated": "node scripts/measure-jev.ts --cases scripts/gen-cases/generated-cases.json",
+    "validate:generated-cases": "node scripts/gen-cases/validate-cases.ts"
   },
   "prettier": {
     "plugins": [

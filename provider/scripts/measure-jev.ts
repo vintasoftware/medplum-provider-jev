@@ -4,6 +4,7 @@
 //   npm --prefix provider run measure                     # hosted Jev, one round
 //   npm --prefix provider run measure -- --rounds 3
 //   npm --prefix provider run measure -- --backend modal  # the self-hosted model on the private Modal Server
+//   npm --prefix provider run measure -- --cases scripts/gen-cases/generated-cases.json
 //
 // Hosted Jev needs TYPESAFE_API_KEY; Modal needs CONSISTENCY_MODEL_URL, CONSISTENCY_MODAL_KEY
 // and CONSISTENCY_MODAL_SECRET, in the environment or the root .env. Writes
@@ -37,7 +38,9 @@ export interface MeasurementCase {
 
 export function measurementCases(file = CASES_FILE): MeasurementCase[] {
   const data = JSON.parse(readFileSync(file, 'utf8'));
-  const authored: MeasurementCase[] = data.authored_cases.map((c: any) => ({
+  // The default file's hand-picked pairs are `authored_cases`; a generated batch (see
+  // scripts/gen-cases/) uses `cases` instead and has no `scenario` to append.
+  const authored: MeasurementCase[] = (data.authored_cases ?? data.cases ?? []).map((c: any) => ({
     id: c.id,
     expected: c.expected,
     medication: c.medication,
@@ -45,6 +48,9 @@ export function measurementCases(file = CASES_FILE): MeasurementCase[] {
     note: c.visit_note,
     highlight: { outside: c.highlight.outside_document, note: c.highlight.visit_note },
   }));
+  if (!data.scenario) {
+    return authored;
+  }
   const s = data.scenario;
   const outside: Doc = {
     title: 'Discharge summary',
@@ -165,7 +171,11 @@ export async function measure(options: MeasureOptions): Promise<number> {
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
-    options: { rounds: { type: 'string', default: '1' }, backend: { type: 'string', default: 'typesafe' } },
+    options: {
+      rounds: { type: 'string', default: '1' },
+      backend: { type: 'string', default: 'typesafe' },
+      cases: { type: 'string' },
+    },
   });
   const rounds = Number(values.rounds);
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 5) {
@@ -190,7 +200,8 @@ async function main(): Promise<void> {
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z');
   console.log('  case                           choice                    p     reference  highlights (outside/note)');
-  await measure({ rounds, service, outFile: join(dir, `${values.backend}-run-${stamp}.jsonl`) });
+  const cases = values.cases ? measurementCases(join(REPO_ROOT, 'provider', values.cases)) : undefined;
+  await measure({ rounds, service, outFile: join(dir, `${values.backend}-run-${stamp}.jsonl`), cases });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
